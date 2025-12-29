@@ -11,7 +11,7 @@ $ModuleConfig = @{
     'inventory' = @{ Description = 'Inventory Management System'; Port = 3001 }
     'ledger'    = @{ Description = 'Ledger & Accounting System';   Port = 3002 }
     'pos'       = @{ Description = 'Point of Sale System';         Port = 3003 }
-    'portal'    = @{ Description = 'Main dashboard';               Port = 3000 }
+    'portal'    = @{ Description = 'Main dashboard';               Port = 3005 }
 }
 
 # Function to check if a directory exists

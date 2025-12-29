@@ -2,7 +2,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15
-    pull_policy: always
+    #pull_policy: always
     restart: unless-stopped
     environment:
       POSTGRES_USER: mguser
@@ -22,7 +22,7 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4
-    pull_policy: always
+    #pull_policy: always
     restart: unless-stopped
     user: root
     environment:
@@ -42,7 +42,7 @@ services:
   # Auth Service
   auth:
     image: ghcr.io/khaaliid/mg-erp/mg-auth:latest
-    pull_policy: always
+    #pull_policy: always
     container_name: mg-erp-auth
     restart: unless-stopped
     env_file:
@@ -72,7 +72,7 @@ services:
   # Ledger Service
   ledger:
     image: ghcr.io/khaaliid/mg-erp/mg-ledger:latest
-    pull_policy: always
+    #pull_policy: always
     container_name: mg-erp-ledger
     restart: unless-stopped
     env_file:
@@ -102,7 +102,7 @@ services:
   # Inventory Service
   inventory:
     image: ghcr.io/khaaliid/mg-erp/mg-inventory:latest
-    pull_policy: always
+    #pull_policy: always
     container_name: mg-erp-inventory
     restart: unless-stopped
     env_file:
@@ -132,7 +132,7 @@ services:
   # POS Backend Service
   pos-backend:
     image: ghcr.io/khaaliid/mg-erp/mg-pos:latest
-    pull_policy: always
+    #pull_policy: always
     container_name: mg-erp-pos-backend
     restart: unless-stopped
     env_file:
@@ -168,7 +168,7 @@ services:
   # POS Frontend
   pos-frontend:
     image: ghcr.io/khaaliid/mg-erp/mg-pos-frontend:latest
-    pull_policy: always
+    #pull_policy: always
     container_name: mg-erp-pos-frontend
     restart: unless-stopped
     env_file:
@@ -193,7 +193,7 @@ services:
   # Auth Frontend
   auth-frontend:
     image: ghcr.io/khaaliid/mg-erp/mg-auth-frontend:latest
-    pull_policy: always
+    #pull_policy: always
     container_name: mg-erp-auth-frontend
     restart: unless-stopped
     env_file:
@@ -213,7 +213,7 @@ services:
 
   ledger-frontend:
     image: ghcr.io/khaaliid/mg-erp/mg-ledger-frontend:latest
-    pull_policy: always
+    #pull_policy: always
     container_name: mg-erp-ledger-frontend
     restart: unless-stopped
     environment:
@@ -236,7 +236,7 @@ services:
 
   inventory-frontend:
     image: ghcr.io/khaaliid/mg-erp/mg-inventory-frontend:latest
-    pull_policy: always
+    #pull_policy: always
     container_name: mg-erp-inventory-frontend
     restart: unless-stopped
     env_file:
@@ -256,7 +256,7 @@ services:
 
   portal-frontend:
     image: ghcr.io/khaaliid/mg-erp/mg-portal-frontend:latest
-    pull_policy: always
+    #pull_policy: always
     container_name: mg-erp-portal-frontend
     restart: unless-stopped
     env_file:
@@ -272,6 +272,59 @@ services:
       - "3005:80"
     depends_on:
       - auth
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mg-erp-network
+
+  # CRM Backend Service
+  crm-backend:
+    build:
+      context: ./crm/backend
+      dockerfile: Dockerfile
+    container_name: mg-erp-crm-backend
+    restart: unless-stopped
+    env_file:
+      - ./services.env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://mguser:mgpassword@postgres:5432/mgerp
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth:8004}
+      LOG_LEVEL: INFO
+      ENVIRONMENT: production
+      DEBUG: "false"
+    ports:
+      - "8006:8006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8006/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - mg-erp-network
+
+  # CRM Frontend
+  crm-frontend:
+    build:
+      context: ./crm/frontend
+      dockerfile: Dockerfile
+    container_name: mg-erp-crm-frontend
+    restart: unless-stopped
+    env_file:
+      - ./services.env
+    ports:
+      - "3006:80"
+    depends_on:
+      - crm-backend
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/ || exit 1"]
       interval: 30s

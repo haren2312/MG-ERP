@@ -14,6 +14,7 @@ const modules = [
   { key: 'ledger', name: 'Ledger', icon: '📒', url: getModuleUrl('ledger', 'http://localhost:3001'), color: '#2563EB', desc: 'Financial Accounting' },
   { key: 'inventory', name: 'Inventory', icon: '📦', url: getModuleUrl('inventory', 'http://localhost:3002'), color: '#059669', desc: 'Stock Management' },
   { key: 'pos', name: 'Point of Sale', icon: '🛒', url: getModuleUrl('pos', 'http://localhost:3003'), color: '#DC2626', desc: 'Sales & Checkout' },
+  { key: 'crm', name: 'CRM', icon: '👥', url: getModuleUrl('crm', 'http://localhost:3006'), color: '#EA580C', desc: 'Customer Relationship Management' },
 ]
 
 const Modules: React.FC = () => {

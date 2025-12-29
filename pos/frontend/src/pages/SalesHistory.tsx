@@ -6,19 +6,11 @@
 import React, { useState, useEffect } from 'react';
 import { enhancedApiService, Sale } from '../services/enhancedApiService';
 import { useAuth } from '../contexts/AuthContext';
-import { printReceipt } from '../utils/receiptPrinter';
+import { printReceipt, printReceiptPdf } from '../utils/receiptPrinter';
+import { printReceiptEscPos } from '../utils/escposPrinter';
 
 function formatEGP(v: number) {
   return `${v.toFixed(2)} EGP`;
-}
-
-function formatCurrency(v: number, currencyCode: string) {
-  const value = typeof v === 'number' && !isNaN(v) ? v : 0;
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode || 'USD' }).format(value);
-  } catch {
-    return `${value.toFixed(2)} ${currencyCode || 'USD'}`;
-  }
 }
 
 const SalesHistory: React.FC = () => {
@@ -166,7 +158,7 @@ const SalesHistory: React.FC = () => {
     }
   };
 
-  const handlePrintReceipt = (sale: Sale) => {
+  const handlePrintReceipt = async (sale: Sale) => {
     const items = sale.items.map(item => ({
       name: item.product_id,
       qty: item.quantity,
@@ -175,32 +167,80 @@ const SalesHistory: React.FC = () => {
       total: item.quantity * item.unit_price
     }));
 
-    printReceipt(
-      {
-        saleNumber: sale.sale_number,
-        date: new Date(sale.created_at),
-        cashier: sale.cashier,
-        customerName: sale.customer_name,
-        items,
-        subtotal: sale.subtotal,
-        discount: sale.discount_amount,
-        tax: sale.tax_amount,
-        total: sale.total_amount,
-        paymentMethod: sale.payment_method || 'Cash',
-        tenderedAmount: sale.tendered_amount,
-        changeAmount: sale.change_amount
-      },
-      {
-        currencyCode,
-        currencySymbol,
-        receiptHeader,
-        receiptFooter,
-        businessName,
-        businessAddress,
-        businessPhone,
-        businessEmail
+    const receipt = {
+      saleNumber: sale.sale_number,
+      date: new Date(sale.created_at),
+      cashier: sale.cashier,
+      customerName: sale.customer_name,
+      items,
+      subtotal: sale.subtotal,
+      discount: sale.discount_amount,
+      tax: sale.tax_amount,
+      total: sale.total_amount,
+      paymentMethod: sale.payment_method || 'Cash',
+      tenderedAmount: sale.tendered_amount,
+      changeAmount: sale.change_amount
+    };
+
+    const settings = {
+      currencyCode,
+      currencySymbol,
+      receiptHeader,
+      receiptFooter,
+      businessName,
+      businessAddress,
+      businessPhone,
+      businessEmail
+    };
+
+    try {
+      if ('serial' in navigator) {
+        await printReceiptEscPos(receipt as any, settings as any);
+        return;
       }
-    );
+    } catch (err) {
+      console.warn('ESC/POS printing failed, falling back to HTML:', err);
+    }
+
+    printReceipt(receipt as any, settings as any);
+  };
+
+  const handlePrintPdf = (sale: Sale) => {
+    const items = sale.items.map(item => ({
+      name: item.product_id,
+      qty: item.quantity,
+      price: item.unit_price,
+      size: item.size || null,
+      total: item.quantity * item.unit_price
+    }));
+
+    const receipt = {
+      saleNumber: sale.sale_number,
+      date: new Date(sale.created_at),
+      cashier: sale.cashier,
+      customerName: sale.customer_name,
+      items,
+      subtotal: sale.subtotal,
+      discount: sale.discount_amount,
+      tax: sale.tax_amount,
+      total: sale.total_amount,
+      paymentMethod: sale.payment_method || 'Cash',
+      tenderedAmount: sale.tendered_amount,
+      changeAmount: sale.change_amount
+    };
+
+    const settings = {
+      currencyCode,
+      currencySymbol,
+      receiptHeader,
+      receiptFooter,
+      businessName,
+      businessAddress,
+      businessPhone,
+      businessEmail
+    };
+
+    printReceiptPdf(receipt as any, settings as any);
   };
 
   if (loading) {
@@ -521,6 +561,12 @@ const SalesHistory: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
                   <span>Print Receipt</span>
+                </button>
+                <button
+                  onClick={() => handlePrintPdf(selectedSale)}
+                  className="px-4 py-2 bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 transition-colors"
+                >
+                  Print PDF
                 </button>
                 {(user?.role === 'manager' || user?.role === 'admin') && (
                   <>

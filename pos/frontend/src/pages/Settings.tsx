@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { testESCPOSPrinter, ESCPOSPrinter, createDummyReceiptData } from '../utils/escPosTest';
+import { ESCPOSPrinter, createDummyReceiptData } from '../utils/escPosTest';
 
 interface POSSettings {
   id: number;

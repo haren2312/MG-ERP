@@ -402,7 +402,7 @@ const Products = () => {
             <BarcodeDisplay
               data={viewBarcodeProduct.barcode || viewBarcodeProduct.sku || viewBarcodeProduct.id}
               label={`${viewBarcodeProduct.name} - ${viewBarcodeProduct.sku || ''}`}
-              format="CODE128"
+              type="CODE128"
             />
           </div>
         </div>

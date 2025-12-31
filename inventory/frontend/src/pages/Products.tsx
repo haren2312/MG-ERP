@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import ProductForm from '../components/ProductForm'
+import BarcodeDisplay from '../components/BarcodeDisplay'
 import { productService, Product, CreateProductRequest } from '../services/productService'
+import { printBarcodeSheet } from '../utils/barcodeGenerator'
 
 const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -12,6 +14,8 @@ const Products = () => {
   const [error, setError] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add')
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set())
+  const [viewBarcodeProduct, setViewBarcodeProduct] = useState<Product | null>(null)
 
   useEffect(() => {
     // Check if action=add is in URL params
@@ -146,6 +150,43 @@ const Products = () => {
     }
   }
 
+  const toggleProductSelection = (productId: string) => {
+    const newSelected = new Set(selectedProducts);
+    if (newSelected.has(productId)) {
+      newSelected.delete(productId);
+    } else {
+      newSelected.add(productId);
+    }
+    setSelectedProducts(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedProducts.size === products.length) {
+      setSelectedProducts(new Set());
+    } else {
+      setSelectedProducts(new Set(products.map(p => p.id)));
+    }
+  };
+
+  const handlePrintSelectedBarcodes = () => {
+    const selectedProductsList = products.filter(p => selectedProducts.has(p.id));
+    if (selectedProductsList.length === 0) {
+      alert('Please select products to print barcodes');
+      return;
+    }
+
+    const items = selectedProductsList.map(product => ({
+      data: product.barcode || product.sku || product.id,
+      label: `${product.name} - ${product.sku || ''}`
+    }));
+
+    printBarcodeSheet(items, 'CODE128', { columns: 3, labelHeight: 150 });
+  };
+
+  const handleViewBarcode = (product: Product) => {
+    setViewBarcodeProduct(product);
+  };
+
   if (showForm) {
     return (
       <div className="space-y-6">
@@ -198,17 +239,28 @@ const Products = () => {
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
-          <button
-            onClick={() => {
-              setFormMode('add')
-              setEditingProduct(null)
-              setShowForm(true)
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
-          >
-            <span>➕</span>
-            <span>Add Product</span>
-          </button>
+          <div className="flex space-x-3">
+            {selectedProducts.size > 0 && (
+              <button
+                onClick={handlePrintSelectedBarcodes}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+              >
+                <span>🏷️</span>
+                <span>Print {selectedProducts.size} Barcode{selectedProducts.size > 1 ? 's' : ''}</span>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setFormMode('add')
+                setEditingProduct(null)
+                setShowForm(true)
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+            >
+              <span>➕</span>
+              <span>Add Product</span>
+            </button>
+          </div>
         </div>
         
         {error && (
@@ -246,6 +298,14 @@ const Products = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <input
+                      type="checkbox"
+                      checked={selectedProducts.size === products.length && products.length > 0}
+                      onChange={toggleSelectAll}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Product
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -266,6 +326,14 @@ const Products = () => {
                 {products.map((product) => (
                   <tr key={product.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedProducts.has(product.id)}
+                        onChange={() => toggleProductSelection(product.id)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">{product.name || 'Unnamed Product'}</div>
                         <div className="text-sm text-gray-500">{product.description || 'No description'}</div>
@@ -283,6 +351,12 @@ const Products = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button 
+                        onClick={() => handleViewBarcode(product)}
+                        className="text-green-600 hover:text-green-900 mr-3"
+                      >
+                        Barcode
+                      </button>
                       <button 
                         onClick={() => handleEditProduct(product)}
                         className="text-blue-600 hover:text-blue-900 mr-3"
@@ -303,6 +377,36 @@ const Products = () => {
           </div>
         )}
       </div>
+
+      {/* Barcode Modal */}
+      {viewBarcodeProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Product Barcode</h2>
+              <button
+                onClick={() => setViewBarcodeProduct(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-1">
+                <strong>Product:</strong> {viewBarcodeProduct.name}
+              </p>
+              <p className="text-sm text-gray-600">
+                <strong>SKU:</strong> {viewBarcodeProduct.sku || 'N/A'}
+              </p>
+            </div>
+            <BarcodeDisplay
+              data={viewBarcodeProduct.barcode || viewBarcodeProduct.sku || viewBarcodeProduct.id}
+              label={`${viewBarcodeProduct.name} - ${viewBarcodeProduct.sku || ''}`}
+              format="CODE128"
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

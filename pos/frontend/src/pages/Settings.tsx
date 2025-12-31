@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { testESCPOSPrinter, ESCPOSPrinter, createDummyReceiptData } from '../utils/escPosTest';
 
 interface POSSettings {
   id: number;
@@ -31,6 +32,13 @@ const Settings: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // ESC/POS Printer state
+  const [escposPrinterIp, setEscposPrinterIp] = useState('192.168.178.29');
+  const [escposPrinterPort, setEscposPrinterPort] = useState(10631);
+  const [escposPrinterEnabled, setEscposPrinterEnabled] = useState(false);
+  const [testingPrinter, setTestingPrinter] = useState(false);
+  const [printerTestResult, setPrinterTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -144,6 +152,40 @@ const Settings: React.FC = () => {
       setFormData({ ...formData, [name]: parseFloat(value) });
     } else {
       setFormData({ ...formData, [name]: value });
+    }
+  };
+
+  const handleTestPrinter = async () => {
+    setTestingPrinter(true);
+    setPrinterTestResult(null);
+
+    try {
+      const printer = new ESCPOSPrinter({ host: escposPrinterIp, port: escposPrinterPort });
+      const { data, settings } = createDummyReceiptData();
+      
+      // Override with actual business settings if available
+      if (formData.business_name) settings.businessName = formData.business_name;
+      if (formData.business_address) settings.businessAddress = formData.business_address;
+      if (formData.business_phone) settings.businessPhone = formData.business_phone;
+      if (formData.business_email) settings.businessEmail = formData.business_email;
+      if (formData.receipt_header) settings.receiptHeader = formData.receipt_header;
+      if (formData.receipt_footer) settings.receiptFooter = formData.receipt_footer;
+      settings.currencyCode = formData.currency_code;
+      settings.currencySymbol = formData.currency_symbol;
+
+      await printer.printReceipt(data, settings);
+      
+      setPrinterTestResult({
+        success: true,
+        message: '✓ Test receipt sent successfully! Check your printer/emulator.'
+      });
+    } catch (err) {
+      setPrinterTestResult({
+        success: false,
+        message: '✗ Failed to send test receipt: ' + (err instanceof Error ? err.message : 'Unknown error')
+      });
+    } finally {
+      setTestingPrinter(false);
     }
   };
 
@@ -422,6 +464,110 @@ const Settings: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* ESC/POS Printer Settings */}
+            <div className="border-b pb-4">
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">ESC/POS Thermal Printer</h2>
+              
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> Configure your network thermal printer or emulator. 
+                  Test the connection before using in production.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="escposPrinterEnabled"
+                    checked={escposPrinterEnabled}
+                    onChange={(e) => setEscposPrinterEnabled(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="escposPrinterEnabled" className="ml-2 text-sm font-medium text-gray-700">
+                    Enable ESC/POS Network Printer
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Printer IP Address
+                    </label>
+                    <input
+                      type="text"
+                      value={escposPrinterIp}
+                      onChange={(e) => setEscposPrinterIp(e.target.value)}
+                      placeholder="e.g., 192.168.1.100"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Printer Port
+                    </label>
+                    <input
+                      type="number"
+                      value={escposPrinterPort}
+                      onChange={(e) => setEscposPrinterPort(parseInt(e.target.value))}
+                      placeholder="e.g., 9100 or 10631"
+                      min="1"
+                      max="65535"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  <button
+                    type="button"
+                    onClick={handleTestPrinter}
+                    disabled={testingPrinter || !escposPrinterIp}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  >
+                    {testingPrinter ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Testing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        <span>Print Test Receipt</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="text-sm text-gray-600">
+                    Current: {escposPrinterIp}:{escposPrinterPort}
+                  </div>
+                </div>
+
+                {printerTestResult && (
+                  <div className={`p-4 rounded ${printerTestResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                    <p className={`text-sm ${printerTestResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                      {printerTestResult.message}
+                    </p>
+                  </div>
+                )}
+
+                <div className="text-sm text-gray-600 space-y-1">
+                  <p><strong>Common Ports:</strong></p>
+                  <ul className="list-disc list-inside ml-4">
+                    <li>9100 - Standard ESC/POS network port</li>
+                    <li>10631 - EPOSConnectJS virtual printer</li>
+                    <li>8008 - Some thermal printer emulators</li>
+                  </ul>
                 </div>
               </div>
             </div>

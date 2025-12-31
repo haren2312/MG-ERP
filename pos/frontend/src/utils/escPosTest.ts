@@ -206,7 +206,7 @@ export class ESCPOSPrinter {
         headers: {
           'Content-Type': 'application/octet-stream',
         },
-        body: commands,
+        body: commands as BodyInit,
       });
 
       if (!response.ok) {
@@ -238,7 +238,7 @@ export class ESCPOSPrinter {
         headers: {
           'Content-Type': 'application/octet-stream',
         },
-        body: commands,
+        body: commands as BodyInit,
       });
 
       if (!response.ok) {

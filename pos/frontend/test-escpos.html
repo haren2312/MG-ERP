@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESC/POS Printer Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196F3;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .danger {
+            background: #f44336;
+        }
+        .danger:hover {
+            background: #da190b;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        #status.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            display: block;
+        }
+        #status.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            display: block;
+        }
+        .code-block {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖨️ ESC/POS Printer Test</h1>
+        <div class="info">
+            <strong>Info:</strong> This page sends ESC/POS commands to a network thermal printer or simulator.
+            Make sure your printer/simulator is running and accessible on the network.
+        </div>
+
+        <div class="form-group">
+            <label for="host">Printer IP Address:</label>
+            <input type="text" id="host" value="192.168.178.29" placeholder="e.g., 192.168.1.100">
+        </div>
+
+        <div class="form-group">
+            <label for="port">Port:</label>
+            <input type="number" id="port" value="10631" placeholder="e.g., 9100">
+        </div>
+
+        <button onclick="testPrint()" id="printBtn">Print Test Receipt</button>
+        <button onclick="printSimple()" class="danger">Print Simple Text</button>
+
+        <div id="status"></div>
+
+        <div class="code-block" id="commandLog">Ready to send commands...</div>
+    </div>
+
+    <script>
+        // ESC/POS command constants
+        const ESC = '\x1B';
+        const GS = '\x1D';
+
+        function log(message, isError = false) {
+            const logDiv = document.getElementById('commandLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.textContent += `\n[${timestamp}] ${message}`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function showStatus(message, isSuccess) {
+            const status = document.getElementById('status');
+            status.className = isSuccess ? 'success' : 'error';
+            status.textContent = message;
+            status.style.display = 'block';
+        }
+
+        function textToBytes(text) {
+            const bytes = [];
+            for (let i = 0; i < text.length; i++) {
+                bytes.push(text.charCodeAt(i));
+            }
+            return bytes;
+        }
+
+        function formatCurrency(value, currencyCode = 'USD') {
+            try {
+                return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode }).format(value);
+            } catch {
+                return `$${value.toFixed(2)}`;
+            }
+        }
+
+        function twoColumnLine(label, value, width = 32) {
+            if (label.length + value.length > width) {
+                return label.substring(0, width - value.length) + value;
+            }
+            const spaces = width - label.length - value.length;
+            return label + ' '.repeat(spaces) + value;
+        }
+
+        function createDummyReceipt() {
+            return {
+                saleNumber: 'TEST-' + Date.now().toString().slice(-6),
+                date: new Date(),
+                cashier: 'Test Cashier',
+                customerName: 'John Doe',
+                items: [
+                    { name: 'Wireless Mouse', qty: 2, price: 15.99, size: null, total: 31.98 },
+                    { name: 'USB-C Cable', qty: 3, price: 8.50, size: '2m', total: 25.50 },
+                    { name: 'Laptop Stand', qty: 1, price: 45.00, size: 'Aluminum', total: 45.00 },
+                    { name: 'Keyboard (Mechanical)', qty: 1, price: 89.99, size: 'RGB', total: 89.99 },
+                    { name: 'HDMI Cable', qty: 2, price: 12.75, size: '3m', total: 25.50 }
+                ],
+                subtotal: 217.97,
+                discount: 10.00,
+                tax: 29.12,
+                taxRate: 0.14,
+                total: 237.09,
+                paymentMethod: 'Cash',
+                tenderedAmount: 250.00,
+                changeAmount: 12.91,
+                settings: {
+                    currencyCode: 'USD',
+                    businessName: 'MG-ERP Test Store',
+                    businessAddress: '123 Main Street, Suite 100\nNew York, NY 10001',
+                    businessPhone: '+1 (555) 123-4567',
+                    businessEmail: 'info@teststore.com',
+                    receiptHeader: 'Thank you for shopping with us!',
+                    receiptFooter: 'Visit us again soon!\nwww.teststore.com'
+                }
+            };
+        }
+
+        function buildTestReceipt() {
+            const receipt = createDummyReceipt();
+            const commands = [];
+            const lineWidth = 32;
+
+            // Initialize printer
+            commands.push(...textToBytes(ESC + '@'));
+            log('Initialize printer');
+
+            // Set character code table
+            commands.push(...textToBytes(ESC + 't' + String.fromCharCode(0)));
+
+            // Center align
+            commands.push(...textToBytes(ESC + 'a' + String.fromCharCode(1)));
+            log('Set center alignment');
+
+            // Bold on + Double size for business name
+            commands.push(...textToBytes(ESC + 'E' + String.fromCharCode(1)));
+            commands.push(...textToBytes(GS + '!' + String.fromCharCode(0x11)));
+            commands.push(...textToBytes(receipt.settings.businessName.toUpperCase() + '\n'));
+            log('Print header: ' + receipt.settings.businessName);
+
+            // Normal size
+            commands.push(...textToBytes(GS + '!' + String.fromCharCode(0)));
+            commands.push(...textToBytes(ESC + 'E' + String.fromCharCode(0)));
+
+            // Business details
+            commands.push(...textToBytes(receipt.settings.businessAddress + '\n'));
+            commands.push(...textToBytes('Tel: ' + receipt.settings.businessPhone + '\n'));
+            commands.push(...textToBytes(receipt.settings.businessEmail + '\n'));
+
+            // Receipt header
+            commands.push(...textToBytes('\n' + receipt.settings.receiptHeader + '\n'));
+
+            // Dashed line
+            commands.push(...textToBytes('\n' + '-'.repeat(lineWidth) + '\n'));
+
+            // Left align
+            commands.push(...textToBytes(ESC + 'a' + String.fromCharCode(0)));
+            log('Set left alignment');
+
+            commands.push(...textToBytes('Sale #: ' + receipt.saleNumber + '\n'));
+            commands.push(...textToBytes('Date: ' + receipt.date.toLocaleString() + '\n'));
+            commands.push(...textToBytes('Cashier: ' + receipt.cashier + '\n'));
+            commands.push(...textToBytes('Customer: ' + receipt.customerName + '\n'));
+
+            // Dashed line
+            commands.push(...textToBytes('-'.repeat(lineWidth) + '\n'));
+
+            // Items
+            log('Printing ' + receipt.items.length + ' items');
+            receipt.items.forEach(item => {
+                const itemName = item.name + (item.size ? ' (' + item.size + ')' : '');
+                commands.push(...textToBytes(itemName + '\n'));
+                
+                const qtyPrice = '  ' + item.qty + ' x ' + formatCurrency(item.price, receipt.settings.currencyCode);
+                const total = formatCurrency(item.total, receipt.settings.currencyCode);
+                commands.push(...textToBytes(twoColumnLine(qtyPrice, total, lineWidth) + '\n'));
+            });
+
+            // Dashed line
+            commands.push(...textToBytes('-'.repeat(lineWidth) + '\n'));
+
+            // Totals
+            commands.push(...textToBytes(twoColumnLine('Subtotal:', formatCurrency(receipt.subtotal, receipt.settings.currencyCode), lineWidth) + '\n'));
+            commands.push(...textToBytes(twoColumnLine('Discount:', '-' + formatCurrency(receipt.discount, receipt.settings.currencyCode), lineWidth) + '\n'));
+            
+            const taxLabel = 'Tax (' + Math.round(receipt.taxRate * 100) + '%):';
+            commands.push(...textToBytes(twoColumnLine(taxLabel, formatCurrency(receipt.tax, receipt.settings.currencyCode), lineWidth) + '\n'));
+
+            // Bold on for total
+            commands.push(...textToBytes(ESC + 'E' + String.fromCharCode(1)));
+            commands.push(...textToBytes(twoColumnLine('TOTAL:', formatCurrency(receipt.total, receipt.settings.currencyCode), lineWidth) + '\n'));
+            commands.push(...textToBytes(ESC + 'E' + String.fromCharCode(0)));
+
+            commands.push(...textToBytes('\n'));
+            commands.push(...textToBytes(twoColumnLine('Payment:', receipt.paymentMethod, lineWidth) + '\n'));
+            commands.push(...textToBytes(twoColumnLine('Tendered:', formatCurrency(receipt.tenderedAmount, receipt.settings.currencyCode), lineWidth) + '\n'));
+            commands.push(...textToBytes(twoColumnLine('Change:', formatCurrency(receipt.changeAmount, receipt.settings.currencyCode), lineWidth) + '\n'));
+
+            // Center align for footer
+            commands.push(...textToBytes(ESC + 'a' + String.fromCharCode(1)));
+            commands.push(...textToBytes('\n' + receipt.settings.receiptFooter + '\n'));
+            log('Print footer');
+
+            // Feed and cut
+            commands.push(...textToBytes('\n\n\n'));
+            commands.push(...textToBytes(GS + 'V' + String.fromCharCode(66, 0))); // Partial cut
+            log('Feed and cut paper');
+
+            return new Uint8Array(commands);
+        }
+
+        function buildSimpleReceipt() {
+            const commands = [];
+
+            // Initialize
+            commands.push(...textToBytes(ESC + '@'));
+
+            // Center align
+            commands.push(...textToBytes(ESC + 'a' + String.fromCharCode(1)));
+
+            // Simple text
+            commands.push(...textToBytes('ESC/POS Test\n'));
+            commands.push(...textToBytes(new Date().toLocaleString() + '\n'));
+            commands.push(...textToBytes('\nHello from Browser!\n'));
+
+            // Feed
+            commands.push(...textToBytes('\n\n\n'));
+
+            return new Uint8Array(commands);
+        }
+
+        async function sendToPrinter(commands) {
+            const host = document.getElementById('host').value;
+            const port = document.getElementById('port').value;
+            const url = `http://${host}:${port}/p/virtual`;
+
+            log(`Sending ${commands.length} bytes to ${url}...`);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain',
+                        
+                    },
+                    body: commands.buffer,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                log('✓ Print command sent successfully!');
+                showStatus('✓ Print command sent successfully!', true);
+
+                const result = await response.text();
+                if (result) {
+                    log('Response: ' + result);
+                }
+
+                return true;
+            } catch (error) {
+                log('✗ Error: ' + error.message, true);
+                showStatus('✗ Failed to send print command: ' + error.message, false);
+                return false;
+            }
+        }
+
+        async function testPrint() {
+            const btn = document.getElementById('printBtn');
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+
+            log('\n=== Starting Test Print ===');
+            const commands = buildTestReceipt();
+            await sendToPrinter(commands);
+
+            btn.disabled = false;
+            btn.textContent = 'Print Test Receipt';
+        }
+
+        async function printSimple() {
+            log('\n=== Starting Simple Print ===');
+            const commands = buildSimpleReceipt();
+            await sendToPrinter(commands);
+        }
+
+        // Initialize log
+        log('ESC/POS Printer Test ready');
+        log('Configure your printer IP and port above, then click "Print Test Receipt"');
+    </script>
+</body>
+</html>

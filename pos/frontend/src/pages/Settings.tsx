@@ -189,6 +189,47 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleDownloadESCPOS = () => {
+    try {
+      const printer = new ESCPOSPrinter({ host: escposPrinterIp, port: escposPrinterPort });
+      const { data, settings } = createDummyReceiptData();
+      
+      // Override with actual business settings if available
+      if (formData.business_name) settings.businessName = formData.business_name;
+      if (formData.business_address) settings.businessAddress = formData.business_address;
+      if (formData.business_phone) settings.businessPhone = formData.business_phone;
+      if (formData.business_email) settings.businessEmail = formData.business_email;
+      if (formData.receipt_header) settings.receiptHeader = formData.receipt_header;
+      if (formData.receipt_footer) settings.receiptFooter = formData.receipt_footer;
+      settings.currencyCode = formData.currency_code;
+      settings.currencySymbol = formData.currency_symbol;
+
+      // Access the private method through bracket notation to build commands
+      const commands = (printer as any).buildReceiptCommands(data, settings);
+      
+      // Create a blob and download
+      const blob = new Blob([commands], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `escpos-receipt-${Date.now()}.bin`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setPrinterTestResult({
+        success: true,
+        message: '✓ ESC/POS commands downloaded successfully! (' + commands.length + ' bytes)'
+      });
+    } catch (err) {
+      setPrinterTestResult({
+        success: false,
+        message: '✗ Failed to generate ESC/POS commands: ' + (err instanceof Error ? err.message : 'Unknown error')
+      });
+    }
+  };
+
   if (user?.role !== 'admin') {
     return null;
   }
@@ -546,6 +587,17 @@ const Settings: React.FC = () => {
                         <span>Print Test Receipt</span>
                       </>
                     )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadESCPOS}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Download Commands</span>
                   </button>
 
                   <div className="text-sm text-gray-600">

@@ -11,9 +11,8 @@ COPY package*.json ./
 RUN npm ci
 
 # Build-time environment for Vite
-# Use relative URLs that work with nginx proxy
-ARG VITE_API_BASE_URL=/api/v1
-ARG VITE_AUTH_BASE_URL=/auth/v1/auth
+ARG VITE_API_BASE_URL=http://pos-backend:8001/api/v1
+ARG VITE_AUTH_BASE_URL=http://auth:8004/api/v1/auth
 RUN printf "VITE_API_BASE_URL=%s\nVITE_AUTH_BASE_URL=%s\n" "$VITE_API_BASE_URL" "$VITE_AUTH_BASE_URL" > .env
 
 # Copy source code

@@ -6,7 +6,7 @@
  * 2. Run this script from the browser console or import it in your POS app
  */
 
-import { testESCPOSPrinter, createDummyReceiptData, ESCPOSPrinter } from './escPosTest';
+import { createDummyReceiptData, ESCPOSPrinter } from './escPosTest';
 
 // Configuration
 const PRINTER_HOST = '192.168.178.29';

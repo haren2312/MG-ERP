@@ -28,20 +28,6 @@ function formatCurrency(v: number, currencyCode: string): string {
 }
 
 /**
- * Pad string to specific width
- */
-function padRight(str: string, width: number): string {
-  return str.length >= width ? str.substring(0, width) : str + ' '.repeat(width - str.length);
-}
-
-/**
- * Pad string on left to specific width
- */
-function padLeft(str: string, width: number): string {
-  return str.length >= width ? str.substring(0, width) : ' '.repeat(width - str.length) + str;
-}
-
-/**
  * Create two-column line (label on left, value on right)
  */
 function twoColumnLine(label: string, value: string, width: number = 32): string {
@@ -220,7 +206,7 @@ export class ESCPOSPrinter {
         headers: {
           'Content-Type': 'application/octet-stream',
         },
-        body: commands.buffer,
+        body: commands,
       });
 
       if (!response.ok) {
@@ -252,7 +238,7 @@ export class ESCPOSPrinter {
         headers: {
           'Content-Type': 'application/octet-stream',
         },
-        body: commands.buffer,
+        body: commands,
       });
 
       if (!response.ok) {

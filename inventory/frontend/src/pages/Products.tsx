@@ -9,6 +9,11 @@ import {
   getPrinterConfig,
   ESCPOSBarcodeType 
 } from '../utils/escPosBarcodeUtils'
+import {
+  printBarcodeSheetSerial,
+  isWebSerialSupported,
+  ESCPOSBarcodeType as SerialBarcodeType
+} from '../utils/serialBarcodeUtils'
 
 const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -189,7 +194,6 @@ const Products = () => {
     const selectedProductsList = products.filter(p => selectedProducts.has(p.id));
     
     try {
-      const config = getPrinterConfig();
       const items = selectedProductsList.flatMap(product => 
         Array(printQuantity).fill({
           data: product.barcode || product.sku || product.id,
@@ -197,6 +201,25 @@ const Products = () => {
         })
       );
 
+      // Try Web Serial API first (USB/Serial)
+      if (isWebSerialSupported()) {
+        try {
+          await printBarcodeSheetSerial(items, {
+            type: SerialBarcodeType.CODE128,
+            width: 3,
+            height: 80
+          });
+
+          setShowPrintQuantityModal(false);
+          alert(`Successfully sent ${items.length} barcode(s) to USB/Serial printer!`);
+          return;
+        } catch (serialError) {
+          console.warn('Web Serial printing failed, trying network printer:', serialError);
+        }
+      }
+
+      // Fallback to network printer
+      const config = getPrinterConfig();
       await printBarcodeSheet(items, config, {
         type: ESCPOSBarcodeType.CODE128,
         width: 3,
@@ -204,7 +227,7 @@ const Products = () => {
       });
 
       setShowPrintQuantityModal(false);
-      alert(`Successfully sent ${items.length} barcode(s) to thermal printer!`);
+      alert(`Successfully sent ${items.length} barcode(s) to network printer!`);
     } catch (error) {
       console.error('Print error:', error);
       alert('Failed to print barcodes. Check printer connection.');

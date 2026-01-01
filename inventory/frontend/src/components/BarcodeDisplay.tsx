@@ -1,6 +1,6 @@
 /**
  * Barcode Display Component
- * Shows barcode with ESC/POS thermal printing support
+ * Shows barcode with ESC/POS thermal printing support (Web Serial + Network)
  */
 
 import { useState, useEffect } from 'react';
@@ -12,6 +12,12 @@ import {
   ESCPOSBarcodeType,
   HRIPosition 
 } from '../utils/escPosBarcodeUtils';
+import {
+  printBarcodeSerial,
+  isWebSerialSupported,
+  ESCPOSBarcodeType as SerialBarcodeType,
+  HRIPosition as SerialHRIPosition
+} from '../utils/serialBarcodeUtils';
 
 interface BarcodeDisplayProps {
   data: string;
@@ -44,7 +50,6 @@ const BarcodeDisplay = ({
   const handlePrint = async () => {
     try {
       setPrinting(true);
-      const config = getPrinterConfig();
       
       // Map BarcodeType to ESCPOSBarcodeType
       let escPosType = ESCPOSBarcodeType.CODE128;
@@ -53,7 +58,30 @@ const BarcodeDisplay = ({
       else if (type === 'CODE39') escPosType = ESCPOSBarcodeType.CODE39;
       else if (type === 'UPC') escPosType = ESCPOSBarcodeType.UPC_A;
 
-      // Print multiple copies
+      // Try Web Serial API first (USB/Serial)
+      if (isWebSerialSupported()) {
+        try {
+          for (let i = 0; i < quantity; i++) {
+            await printBarcodeSerial(data, {
+              type: escPosType as unknown as SerialBarcodeType,
+              width: 3,
+              height: 100,
+              hri: SerialHRIPosition.BELOW,
+              label
+            });
+            if (i < quantity - 1) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+          }
+          alert(`${quantity} barcode(s) sent to USB/Serial printer successfully!`);
+          return;
+        } catch (serialError) {
+          console.warn('Web Serial printing failed, trying network printer:', serialError);
+        }
+      }
+
+      // Fallback to network printer
+      const config = getPrinterConfig();
       for (let i = 0; i < quantity; i++) {
         await printBarcode(data, config, {
           type: escPosType,
@@ -62,13 +90,12 @@ const BarcodeDisplay = ({
           hri: HRIPosition.BELOW,
           label
         });
-        // Small delay between prints if multiple copies
         if (i < quantity - 1) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
 
-      alert(`${quantity} barcode(s) sent to printer successfully!`);
+      alert(`${quantity} barcode(s) sent to network printer successfully!`);
     } catch (error) {
       console.error('Print error:', error);
       alert('Failed to print barcode. Check printer connection.');

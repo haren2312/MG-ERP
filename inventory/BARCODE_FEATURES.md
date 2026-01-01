@@ -1,16 +1,42 @@
 # Barcode Features - Inventory Module
 
 ## Overview
-The Inventory module includes comprehensive barcode generation and ESC/POS thermal printing capabilities for product labels.
+The Inventory module includes comprehensive barcode generation and dual-mode ESC/POS thermal printing capabilities for product labels.
+
+## Printing Methods
+
+### 1. **USB/Serial Direct Printing (Primary)**
+- **Technology**: Web Serial API (Chrome/Edge only)
+- **Connection**: Direct USB or serial connection to thermal printer
+- **Setup**: Click print, browser prompts to select USB device
+- **Speed**: Fastest, no network required
+- **Reliability**: Direct hardware connection
+- **Browser Support**: Chrome 89+, Edge 89+ (not Firefox/Safari)
+- **User Action**: First time requires device selection permission
+
+### 2. **Network IP Printing (Fallback)**
+- **Technology**: HTTP POST to network printer
+- **Connection**: `http://{IP}:{PORT}` via LAN/WiFi
+- **Setup**: Configure in Printer Settings modal
+- **Flexibility**: Works across devices on same network
+- **Browser Support**: All modern browsers
+- **Common Ports**: 9100 (standard), 10631 (simulator)
+
+### Automatic Fallback Logic:
+1. Try Web Serial API (USB/Serial) first
+2. If not supported or fails → Use network printer
+3. User always gets the fastest available method
 
 ## Features
 
 ### 1. **ESC/POS Thermal Printing**
-- Direct printing to ESC/POS thermal printers via network
-- Configure printer IP and port in Printer Settings
-- Print individual or batch barcodes to label printers
-- Native barcode commands for crisp, high-quality output
+- **Primary Method**: Direct USB/Serial via Web Serial API
+- **Fallback Method**: Network IP connection via HTTP
+- Automatic method selection based on browser support
+- Configure network printer IP and port in Printer Settings (for fallback)
 - Supports common thermal printer ports (9100, 10631)
+- Browser prompts for USB device selection on first use
+- Native barcode commands for crisp, high-quality output
 
 ### 2. **Individual Product Barcodes**
 - Click the "Barcode" button on any product row to view its barcode
@@ -49,27 +75,35 @@ The system uses the following priority for barcode data:
 ## Components
 
 ### Files Created
-1. **`src/utils/escPosBarcodeUtils.ts`** - ESC/POS thermal printer utility
+1. **`src/utils/serialBarcodeUtils.ts`** - Web Serial API barcode printer utility
+   - `printBarcodeSerial()` - Print single barcode via USB/Serial
+   - `printBarcodeSheetSerial()` - Print multiple barcodes via USB/Serial
+   - `getSerialPort()` - Request and cache USB port connection
+   - `isWebSerialSupported()` - Check browser compatibility
+   - `resetSerialPort()` - Reset cached port for reconnection
+
+2. **`src/utils/escPosBarcodeUtils.ts`** - Network ESC/POS thermal printer utility
    - `buildBarcodeCommands()` - Creates ESC/POS barcode commands
    - `buildBarcodeSheetCommands()` - Creates multiple barcode commands
    - `sendToPrinter()` - Sends raw bytes to network printer
-   - `printBarcode()` - Prints single barcode
-   - `printBarcodeSheet()` - Prints multiple barcodes
+   - `printBarcode()` - Prints single barcode to network printer
+   - `printBarcodeSheet()` - Prints multiple barcodes to network printer
    - `downloadBarcodeCommands()` - Downloads ESC/POS commands as .bin
-   - `getPrinterConfig()` / `savePrinterConfig()` - Manage printer settings
+   - `getPrinterConfig()` / `savePrinterConfig()` - Manage network printer settings
 
-2. **`src/utils/barcodeGenerator.ts`** - SVG barcode generation utility
+3. **`src/utils/barcodeGenerator.ts`** - SVG barcode generation utility
    - `generateBarcodeSVG()` - Creates SVG barcode markup for display
    - `generateCODE128()`, `generateEAN13()`, etc. - Format-specific encoders
    - `downloadBarcode()` - Downloads barcode as PNG file
 
-3. **`src/components/BarcodeDisplay.tsx`** - React component for barcode display
+4. **`src/components/BarcodeDisplay.tsx`** - React component for barcode display
    - Renders barcode SVG with product label
-   - Three action buttons: Print (ESC/POS), Download PNG, Download ESC/POS
+   - Three action buttons: Print (auto-detect method), Download PNG, Download ESC/POS
    - Maps barcode types to ESC/POS formats
    - Async printing with loading state
+   - Tries Web Serial first, falls back to network
 
-4. **`src/components/PrinterSettings.tsx`** - Printer configuration modal
+5. **`src/components/PrinterSettings.tsx`** - Network printer configuration modal
    - Configure thermal printer IP address
    - Configure printer port
    - Saves settings to localStorage
@@ -86,19 +120,31 @@ The system uses the following priority for barcode data:
 
 ## Usage
 
-### Configure Printer
+### First-Time Setup (USB/Serial Printer)
+1. Navigate to Products page
+2. Click "Barcode" button on any product
+3. Click "Print" button
+4. **Browser prompts to select USB device** - Select your thermal printer
+5. Grant permission
+6. Barcode prints immediately
+7. Future prints use cached connection (no re-selection needed)
+
+### Configure Network Printer (Fallback)
 1. Navigate to Products page
 2. Click the "Printer" button (🖨️) in the top right
 3. Enter your thermal printer's IP address (e.g., 192.168.1.100)
 4. Enter the port (usually 9100 for printers, 10631 for simulator)
 5. Click "Save Settings"
+6. Network printer used automatically if USB/Serial unavailable
 
 ### Print Single Barcode
 1. Navigate to Products page
 2. Click "Barcode" button on any product
 3. Enter desired quantity (1-50 copies)
-4. Click **Print (ESC/POS)** button
-5. Barcodes print directly to thermal printer
+4. Click **Print** button
+5. If using USB/Serial: Browser may prompt for device selection (first time only)
+6. Barcodes print directly to thermal printer
+7. Success message shows "USB/Serial printer" or "network printer"
 
 ### Print Multiple Barcodes
 1. Navigate to Products page
@@ -107,7 +153,8 @@ The system uses the following priority for barcode data:
 4. Enter quantity per product (1-100 copies each)
 5. Modal shows total: e.g., "3 products × 5 copies = 15 total barcodes"
 6. Click "Print Now"
-7. All barcodes print to thermal printer
+7. If using USB/Serial: Browser may prompt for device selection (first time only)
+8. All barcodes print to thermal printer
 
 ### Download Barcode
 1. Open a product's barcode modal
@@ -138,17 +185,47 @@ The system uses the following priority for barcode data:
 
 ## Printer Compatibility
 
+### USB/Serial Printers (Web Serial API)
+- ✅ Direct USB connection (Type-A, Type-C, micro-USB)
+- ✅ Serial/RS-232 adapters (USB-to-Serial)
+- ✅ ESC/POS compatible thermal printers
+- ✅ 58mm and 80mm receipt printers
+- ✅ Works offline (no network needed)
+- ⚠️ **Browser**: Chrome 89+, Edge 89+ only
+- ⚠️ **Permission**: User must grant device access on first use
+- 📝 **Baud Rate**: 9600 (standard for thermal printers)
+
+### Network Printers (HTTP)
+- ✅ Network-connected thermal printers with HTTP interface
+- ✅ Print servers with RAW port support
+- ✅ ESC/POS simulators
+- ✅ All modern browsers
+- ⚠️ **Same Network**: Printer must be on same LAN/WiFi
+- ⚠️ **CORS**: Printer must accept cross-origin requests
+
 ### Tested With
 - ESC/POS thermal printers (58mm and 80mm)
+- USB thermal printers (via Web Serial API)
 - Network-connected printers with HTTP interface
 - ESC/POS printer simulators
 
 ### Common Printer Ports
-- **9100**: Standard RAW printing port
-- **10631**: Common for simulators and test environments
-- **515**: LPR/LPD protocol (not supported, use 9100)
+- **USB/Serial**: No port needed (direct connection)
+- **Network RAW**: 9100 (standard ESC/POS port)
+- **Simulator**: 10631 (common for test environments)
+- **LPR/LPD**: 515 (not supported, use 9100 instead)
 
 ## Technical Details
+
+### Web Serial API Implementation
+- **Browser API**: `navigator.serial.requestPort()`
+- **Connection**: Direct USB/serial communication
+- **Baud Rate**: 9600 (configurable via `port.open()`)
+- **Port Caching**: Connection cached for subsequent prints
+- **Error Handling**: Graceful fallback to network printing
+- **Permissions**: User grants access once per browser session
+
+### Network Communication
 
 ### Barcode Encoding
 - Native ESC/POS barcode commands (GS k)
@@ -163,14 +240,42 @@ The system uses the following priority for barcode data:
 - Automatic paper cut command at end
 
 ### Browser Compatibility
-- Works in all modern browsers (Chrome, Firefox, Edge, Safari)
-- Fetch API for network communication
-- LocalStorage for printer configuration persistence
-- Async/await for clean error handling
+- **Web Serial API**: Chrome 89+, Edge 89+ (USB/Serial support)
+- **Network Printing**: All modern browsers (Chrome, Firefox, Edge, Safari)
+- **Fetch API**: Network communication
+- **LocalStorage**: Printer configuration persistence
+- **Async/await**: Clean error handling and fallback logic
 
 ## Troubleshooting
 
-### Printer Not Responding
+### USB/Serial Printer Issues
+
+**"Web Serial API is not available"**
+- Use Chrome 89+ or Edge 89+
+- Firefox and Safari don't support Web Serial
+- System will automatically use network printer instead
+
+**"No device selected" or Permission Denied**
+- Click Print button again
+- Select correct USB device from browser prompt
+- Grant permission when asked
+- Check USB cable connection
+
+**Device Not Showing in Selection**
+- Ensure printer is powered on
+- Check USB cable is properly connected
+- Try different USB port
+- Restart printer and browser
+
+**Print Command Sent But Nothing Prints**
+- Check printer has paper
+- Verify printer is online (not in error state)
+- Some printers need specific baud rate (default is 9600)
+- Check printer supports ESC/POS commands
+
+### Network Printer Issues
+
+**Printer Not Responding
 1. Check printer IP address and port in Printer Settings
 2. Ensure printer is on the same network
 3. Test with curl: `curl -X POST --data-binary @barcode.bin http://PRINTER_IP:PORT`

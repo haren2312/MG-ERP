@@ -190,7 +190,12 @@ const Products = () => {
     setShowPrintQuantityModal(true);
   };
 
-  const handleConfirmPrint = async () => {
+  const handlePrintSerial = async () => {
+    if (!isWebSerialSupported()) {
+      alert('Web Serial API is not supported in this browser. Use Chrome or Edge.');
+      return;
+    }
+
     const selectedProductsList = products.filter(p => selectedProducts.has(p.id));
     
     try {
@@ -201,24 +206,31 @@ const Products = () => {
         })
       );
 
-      // Try Web Serial API first (USB/Serial)
-      if (isWebSerialSupported()) {
-        try {
-          await printBarcodeSheetSerial(items, {
-            type: SerialBarcodeType.CODE128,
-            width: 3,
-            height: 80
-          });
+      await printBarcodeSheetSerial(items, {
+        type: SerialBarcodeType.CODE128,
+        width: 3,
+        height: 80
+      });
 
-          setShowPrintQuantityModal(false);
-          alert(`Successfully sent ${items.length} barcode(s) to USB/Serial printer!`);
-          return;
-        } catch (serialError) {
-          console.warn('Web Serial printing failed, trying network printer:', serialError);
-        }
-      }
+      setShowPrintQuantityModal(false);
+      alert(`Successfully sent ${items.length} barcode(s) to USB/Serial printer!`);
+    } catch (error) {
+      console.error('USB/Serial print error:', error);
+      alert('Failed to print to USB/Serial printer. ' + (error instanceof Error ? error.message : 'Check connection.'));
+    }
+  };
 
-      // Fallback to network printer
+  const handlePrintNetwork = async () => {
+    const selectedProductsList = products.filter(p => selectedProducts.has(p.id));
+    
+    try {
+      const items = selectedProductsList.flatMap(product => 
+        Array(printQuantity).fill({
+          data: product.barcode || product.sku || product.id,
+          label: `${product.name} - ${product.sku || ''}`
+        })
+      );
+
       const config = getPrinterConfig();
       await printBarcodeSheet(items, config, {
         type: ESCPOSBarcodeType.CODE128,
@@ -229,8 +241,8 @@ const Products = () => {
       setShowPrintQuantityModal(false);
       alert(`Successfully sent ${items.length} barcode(s) to network printer!`);
     } catch (error) {
-      console.error('Print error:', error);
-      alert('Failed to print barcodes. Check printer connection.');
+      console.error('Network print error:', error);
+      alert('Failed to print to network printer. Check printer connection and settings.');
     }
   };
 
@@ -508,16 +520,33 @@ const Products = () => {
               </p>
             </div>
 
-            <div className="flex space-x-3">
-              <button
-                onClick={handleConfirmPrint}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-              >
-                Print Now
-              </button>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handlePrintSerial}
+                  disabled={!isWebSerialSupported()}
+                  className={`px-4 py-2 ${!isWebSerialSupported() ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-md flex items-center justify-center space-x-2`}
+                  title={!isWebSerialSupported() ? 'Not supported in this browser. Use Chrome or Edge.' : 'Print via USB/Serial'}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <span>USB/Serial</span>
+                </button>
+                <button
+                  onClick={handlePrintNetwork}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center justify-center space-x-2"
+                  title="Print via Network IP"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                  </svg>
+                  <span>Network</span>
+                </button>
+              </div>
               <button
                 onClick={() => setShowPrintQuantityModal(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
               >
                 Cancel
               </button>

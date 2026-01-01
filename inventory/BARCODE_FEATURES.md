@@ -5,27 +5,29 @@ The Inventory module includes comprehensive barcode generation and dual-mode ESC
 
 ## Printing Methods
 
-### 1. **USB/Serial Direct Printing (Primary)**
+### 1. **USB/Serial Direct Printing**
 - **Technology**: Web Serial API (Chrome/Edge only)
 - **Connection**: Direct USB or serial connection to thermal printer
-- **Setup**: Click print, browser prompts to select USB device
+- **Setup**: Click USB/Serial button, browser prompts to select USB device
 - **Speed**: Fastest, no network required
 - **Reliability**: Direct hardware connection
 - **Browser Support**: Chrome 89+, Edge 89+ (not Firefox/Safari)
 - **User Action**: First time requires device selection permission
+- **Button**: Blue "USB/Serial" button
 
-### 2. **Network IP Printing (Fallback)**
+### 2. **Network IP Printing**
 - **Technology**: HTTP POST to network printer
 - **Connection**: `http://{IP}:{PORT}` via LAN/WiFi
 - **Setup**: Configure in Printer Settings modal
 - **Flexibility**: Works across devices on same network
 - **Browser Support**: All modern browsers
 - **Common Ports**: 9100 (standard), 10631 (simulator)
+- **Button**: Indigo "Network" button
 
-### Automatic Fallback Logic:
-1. Try Web Serial API (USB/Serial) first
-2. If not supported or fails → Use network printer
-3. User always gets the fastest available method
+### User Choice:
+- Each print operation offers **both buttons** side-by-side
+- Choose the method that works best for your setup
+- USB/Serial button disabled if browser doesn't support it
 
 ## Features
 
@@ -42,8 +44,10 @@ The Inventory module includes comprehensive barcode generation and dual-mode ESC
 - Click the "Barcode" button on any product row to view its barcode
 - Modal displays the barcode with product name and SKU
 - **Quantity Input**: Specify how many copies to print (1-50)
-- Three action options:
-  - **Print (ESC/POS)**: Send specified quantity directly to thermal printer
+- **Two Print Buttons**:
+  - **USB/Serial**: Direct print via Web Serial API (Chrome/Edge only)
+  - **Network**: Print via IP address (configured in Printer Settings)
+- Additional options:
   - **Download PNG**: Save barcode as image file
   - **Download ESC/POS**: Save raw printer commands as .bin file
 
@@ -52,7 +56,9 @@ The Inventory module includes comprehensive barcode generation and dual-mode ESC
 - Click "Print X Barcodes" button that appears when products are selected
 - **Quantity Modal**: Specify how many copies of each barcode (1-100)
 - Shows total barcodes that will be printed (products × quantity)
-- Sends all barcodes to thermal printer with labels
+- **Two Print Buttons**:
+  - **USB/Serial**: Direct print via Web Serial API
+  - **Network**: Print via IP address
 - Each label includes product name and SKU
 - Separated by dashed lines for easy cutting
 
@@ -141,10 +147,11 @@ The system uses the following priority for barcode data:
 1. Navigate to Products page
 2. Click "Barcode" button on any product
 3. Enter desired quantity (1-50 copies)
-4. Click **Print** button
-5. If using USB/Serial: Browser may prompt for device selection (first time only)
+4. Choose printing method:
+   - Click **USB/Serial** button for direct USB printer (Chrome/Edge only)
+   - OR click **Network** button for IP-based printer
+5. If using USB/Serial: Browser prompts for device selection (first time only)
 6. Barcodes print directly to thermal printer
-7. Success message shows "USB/Serial printer" or "network printer"
 
 ### Print Multiple Barcodes
 1. Navigate to Products page
@@ -152,8 +159,10 @@ The system uses the following priority for barcode data:
 3. Click "Print X Barcodes" button
 4. Enter quantity per product (1-100 copies each)
 5. Modal shows total: e.g., "3 products × 5 copies = 15 total barcodes"
-6. Click "Print Now"
-7. If using USB/Serial: Browser may prompt for device selection (first time only)
+6. Choose printing method:
+   - Click **USB/Serial** button for direct USB printer
+   - OR click **Network** button for IP-based printer
+7. If using USB/Serial: Browser prompts for device selection (first time only)
 8. All barcodes print to thermal printer
 
 ### Download Barcode

@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import ProductForm from '../components/ProductForm'
 import BarcodeDisplay from '../components/BarcodeDisplay'
+import PrinterSettings from '../components/PrinterSettings'
 import { productService, Product, CreateProductRequest } from '../services/productService'
-import { printBarcodeSheet } from '../utils/barcodeGenerator'
+import { 
+  printBarcodeSheet, 
+  getPrinterConfig,
+  ESCPOSBarcodeType 
+} from '../utils/escPosBarcodeUtils'
 
 const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -16,6 +21,9 @@ const Products = () => {
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add')
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set())
   const [viewBarcodeProduct, setViewBarcodeProduct] = useState<Product | null>(null)
+  const [showPrinterSettings, setShowPrinterSettings] = useState(false)
+  const [showPrintQuantityModal, setShowPrintQuantityModal] = useState(false)
+  const [printQuantity, setPrintQuantity] = useState(1)
 
   useEffect(() => {
     // Check if action=add is in URL params
@@ -174,13 +182,33 @@ const Products = () => {
       alert('Please select products to print barcodes');
       return;
     }
+    setShowPrintQuantityModal(true);
+  };
 
-    const items = selectedProductsList.map(product => ({
-      data: product.barcode || product.sku || product.id,
-      label: `${product.name} - ${product.sku || ''}`
-    }));
+  const handleConfirmPrint = async () => {
+    const selectedProductsList = products.filter(p => selectedProducts.has(p.id));
+    
+    try {
+      const config = getPrinterConfig();
+      const items = selectedProductsList.flatMap(product => 
+        Array(printQuantity).fill({
+          data: product.barcode || product.sku || product.id,
+          label: `${product.name} - ${product.sku || ''}`
+        })
+      );
 
-    printBarcodeSheet(items, 'CODE128', { columns: 3, labelHeight: 150 });
+      await printBarcodeSheet(items, config, {
+        type: ESCPOSBarcodeType.CODE128,
+        width: 3,
+        height: 80
+      });
+
+      setShowPrintQuantityModal(false);
+      alert(`Successfully sent ${items.length} barcode(s) to thermal printer!`);
+    } catch (error) {
+      console.error('Print error:', error);
+      alert('Failed to print barcodes. Check printer connection.');
+    }
   };
 
   const handleViewBarcode = (product: Product) => {
@@ -240,6 +268,14 @@ const Products = () => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
           <div className="flex space-x-3">
+            <button
+              onClick={() => setShowPrinterSettings(true)}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+              title="Configure thermal printer"
+            >
+              <span>🖨️</span>
+              <span>Printer</span>
+            </button>
             {selectedProducts.size > 0 && (
               <button
                 onClick={handlePrintSelectedBarcodes}
@@ -404,6 +440,65 @@ const Products = () => {
               label={`${viewBarcodeProduct.name} - ${viewBarcodeProduct.sku || ''}`}
               type="CODE128"
             />
+          </div>
+        </div>
+      )}
+
+      {/* Printer Settings Modal */}
+      {showPrinterSettings && (
+        <PrinterSettings onClose={() => setShowPrinterSettings(false)} />
+      )}
+
+      {/* Print Quantity Modal */}
+      {showPrintQuantityModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Print Barcodes</h2>
+              <button
+                onClick={() => setShowPrintQuantityModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-4">
+                You have selected <strong>{selectedProducts.size}</strong> product(s).
+              </p>
+              
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                How many copies of each barcode?
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={printQuantity}
+                onChange={(e) => setPrintQuantity(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              
+              <p className="text-xs text-gray-500 mt-2">
+                Total barcodes to print: <strong>{selectedProducts.size * printQuantity}</strong>
+              </p>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={handleConfirmPrint}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                Print Now
+              </button>
+              <button
+                onClick={() => setShowPrintQuantityModal(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

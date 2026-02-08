@@ -49,6 +49,8 @@ export const authAPI = {
     api.post('/auth/users', data),
   updateUser: (id: number, data: any) => 
     api.put(`/auth/users/${id}`, data),
+  deleteUser: (id: number) => 
+    api.delete(`/auth/users/${id}`),
 };
 
 // Inventory API

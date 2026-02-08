@@ -9,13 +9,19 @@ import POS from './pages/POS';
 import Ledger from './pages/Ledger';
 import Reports from './pages/Reports';
 import Expenses from './pages/Expenses';
+import Users from './pages/Users';
 import SalesUsers from './pages/SalesUsers';
 import SalesUserReport from './pages/SalesUserReport';
 import './App.css';
+import { useTranslation } from 'react-i18next';
+import './i18n';
+import LanguageSelector from './components/LanguageSelector';
 
 function MainApp() {
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const { user, logout, hasRole } = useAuth();
+  const { t, i18n } = useTranslation();
+  console.log("Current detected language:", i18n.language);
 
   const handleLogout = () => {
     if (confirm('Are you sure you want to logout?')) {
@@ -27,7 +33,7 @@ function MainApp() {
     <div className="app">
       <nav className="sidebar">
         <div className="sidebar-header">
-          <h2>Light ERP</h2>
+          <h2>{t('app_name')}</h2>
           {user && (
             <div style={{
               fontSize: '12px',
@@ -40,57 +46,65 @@ function MainApp() {
               </div>
             </div>
           )}
+          <LanguageSelector />
         </div>
         <ul className="nav-menu">
           <li className={activeMenu === 'dashboard' ? 'active' : ''}>
             <Link to="/" onClick={() => setActiveMenu('dashboard')}>
-              📊 Dashboard
+              📊 {t('dashboard_title')}
             </Link>
           </li>
           {hasRole('manager', 'super_admin') && (
             <li className={activeMenu === 'inventory' ? 'active' : ''}>
               <Link to="/inventory" onClick={() => setActiveMenu('inventory')}>
-                📦 Inventory
+                📦 {t('inventory_title')}
               </Link>
             </li>
           )}
           <li className={activeMenu === 'pos' ? 'active' : ''}>
             <Link to="/pos" onClick={() => setActiveMenu('pos')}>
-              🛒 POS
+              🛒 {t('pos_title')}
             </Link>
           </li>
           {hasRole('manager', 'super_admin') && (
             <li className={activeMenu === 'ledger' ? 'active' : ''}>
               <Link to="/ledger" onClick={() => setActiveMenu('ledger')}>
-                📝 Ledger
+                📝 {t('ledger_title')}
               </Link>
             </li>
           )}
           {hasRole('manager', 'super_admin') && (
             <li className={activeMenu === 'expenses' ? 'active' : ''}>
               <Link to="/expenses" onClick={() => setActiveMenu('expenses')}>
-                💰 Expenses
+                💰 {t('expenses_title')}
               </Link>
             </li>
           )}
           {hasRole('manager', 'super_admin') && (
-            <li className={activeMenu === 'users' ? 'active' : ''}>
-              <Link to="/users" onClick={() => setActiveMenu('users')}>
-                👥 Sales Users
+            <li className={activeMenu === 'auth-users' ? 'active' : ''}>
+              <Link to="/auth-users" onClick={() => setActiveMenu('auth-users')}>
+                🔐 {t('user_management_title')}
+              </Link>
+            </li>
+          )}
+          {hasRole('manager', 'super_admin') && (
+            <li className={activeMenu === 'sales-users' ? 'active' : ''}>
+              <Link to="/sales-users" onClick={() => setActiveMenu('sales-users')}>
+                👥 {t('sales_users_title')}
               </Link>
             </li>
           )}
           {hasRole('manager', 'super_admin') && (
             <li className={activeMenu === 'reports' ? 'active' : ''}>
               <Link to="/reports" onClick={() => setActiveMenu('reports')}>
-                📈 Reports
+                📈 {t('reports_title')}
               </Link>
             </li>
           )}
           {hasRole('manager', 'super_admin') && (
             <li className={activeMenu === 'sales-user-report' ? 'active' : ''}>
               <Link to="/sales-user-report" onClick={() => setActiveMenu('sales-user-report')}>
-                👤 Sales User Report
+                👤 {t('sales_user_report_title')}
               </Link>
             </li>
           )}
@@ -136,7 +150,12 @@ function MainApp() {
               <Expenses />
             </ProtectedRoute>
           } />
-          <Route path="/users" element={
+          <Route path="/auth-users" element={
+            <ProtectedRoute requiredRole="super_admin">
+              <Users />
+            </ProtectedRoute>
+          } />
+          <Route path="/sales-users" element={
             <ProtectedRoute requiredRole="manager">
               <SalesUsers />
             </ProtectedRoute>

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import '../i18n';
+import LanguageSelector from '../components/LanguageSelector';
 
 function Login() {
   const [username, setUsername] = useState('');
@@ -9,6 +12,9 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const { t, i18n } = useTranslation();
+  console.log("Current detected language:", i18n.language);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +39,7 @@ function Login() {
       justifyContent: 'center',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       padding: '20px'
-    }}>
+    }}>      
       <div style={{
         backgroundColor: 'white',
         borderRadius: '10px',
@@ -43,35 +49,36 @@ function Login() {
         width: '100%'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <LanguageSelector />
           <h1 style={{ margin: '0 0 10px 0', color: '#2c3e50', fontSize: '28px' }}>
-            🏪 Light ERP
+            🏪 {t('app_name')}
           </h1>
           <p style={{ margin: 0, color: '#7f8c8d', fontSize: '14px' }}>
-            Sign in to your account
+            {t('login_page_under_title')}
           </p>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Username</label>
+            <label>{t('username')}</label>
             <input
               type="text"
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter username"
+              placeholder={t('enter_username')}
               autoFocus
             />
           </div>
 
           <div className="form-group">
-            <label>Password</label>
+            <label>{t('password')}</label>
             <input
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
+              placeholder={t('enter_password')}
             />
           </div>
 
@@ -94,7 +101,7 @@ function Login() {
             className="button button-primary"
             style={{ width: '100%', padding: '12px', fontSize: '16px' }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? t('signing_in_loading') : t('sign_in')}
           </button>
         </form>       
       </div>

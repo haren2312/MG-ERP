@@ -1,3 +1,13 @@
+/* This ensures that when the direction is RTL, 
+   text aligns to the right automatically */
+[dir='rtl'] {
+  text-align: right;
+}
+
+[dir='ltr'] {
+  text-align: left;
+}
+
 .app {
   display: flex;
   min-height: 100vh;

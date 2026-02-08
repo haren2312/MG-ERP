@@ -26,6 +26,11 @@ $installerScript = @'
 
 $ErrorActionPreference = "Stop"
 
+# Unblock files if they are marked as downloaded
+try {
+    Get-ChildItem -Path $PSScriptRoot -Recurse | Unblock-File
+} catch {}
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -205,7 +210,13 @@ Write-Host "✓ Installer script created" -ForegroundColor Green
 $batchInstaller = @"
 @echo off
 title Light ERP - Installer
-powershell -ExecutionPolicy Bypass -File "%~dp0LightERP_Installer.ps1"
+setlocal
+set "SCRIPT_DIR=%~dp0"
+REM Unblock files downloaded from the internet
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%SCRIPT_DIR%' -Recurse | Unblock-File" 2>nul
+REM Run installer
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%LightERP_Installer.ps1"
+endlocal
 "@
 
 $batchInstallerPath = Join-Path $distDir "Install_LightERP.bat"
@@ -329,6 +340,14 @@ $htmlGuide = @"
         
         <h2>🛠️ Troubleshooting</h2>
         
+        <h3>Windows blocked the installer?</h3>
+        <ul>
+            <li>Right-click the ZIP → Properties → check "Unblock" → Apply.</li>
+            <li>Extract to a local folder (avoid OneDrive or network shares).</li>
+            <li>Open PowerShell in the extracted folder and run: <code>Get-ChildItem -Recurse | Unblock-File</code></li>
+            <li>Then double-click <code>Install_LightERP.bat</code> again.</li>
+        </ul>
+
         <h3>Application won't start?</h3>
         <ul>
             <li>Make sure no other program is using port 8005</li>

@@ -87,6 +87,13 @@ def create_user(
     current_user: User = Depends(get_current_super_admin)
 ):
     """Create new user (Super Admin only)"""
+    # Validate password
+    if not user_data.password or len(user_data.password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters"
+        )
+    
     # Check if username exists
     if db.query(User).filter(User.username == user_data.username).first():
         raise HTTPException(
@@ -141,6 +148,14 @@ def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Validate password if provided
+    if user_data.password is not None:
+        if not user_data.password or len(user_data.password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 6 characters"
+            )
+    
     # Update fields
     if user_data.email is not None:
         user.email = user_data.email
@@ -150,12 +165,33 @@ def update_user(
         user.role = user_data.role
     if user_data.is_active is not None:
         user.is_active = user_data.is_active
+    if user_data.password is not None:
+        user.hashed_password = get_password_hash(user_data.password)
     
     user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(user)
     
     return user
+
+
+@router.delete("/auth/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_super_admin)
+):
+    """Delete user (Super Admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent deleting the current user
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    db.delete(user)
+    db.commit()
 
 
 # ============= Ledger Routes =============

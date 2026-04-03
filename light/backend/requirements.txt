@@ -16,3 +16,5 @@ jaraco.functools
 importlib-resources
 platformdirs
 setuptools
+pytest==8.2.2
+httpx==0.28.1

@@ -69,12 +69,16 @@ export const inventoryAPI = {
 
 // POS API
 export const posAPI = {
-  getTransactions: (params?: { start_date?: string; end_date?: string }) => 
+  getTransactions: (params?: { start_date?: string; end_date?: string; search?: string; skip?: number; limit?: number }) => 
     api.get('/pos/transactions', { params }),
   getTransaction: (id: number) => 
     api.get(`/pos/transactions/${id}`),
   createTransaction: (data: any) => 
     api.post('/pos/transactions', data),
+  createClosure: (data: any) =>
+    api.post('/pos/closures', data),
+  refundTransaction: (transactionId: number, data: any) =>
+    api.post(`/pos/transactions/${transactionId}/refund`, data),
 };
 
 // Ledger API

@@ -4,6 +4,8 @@ Includes Authentication, POS, Inventory, Ledger, and Reports
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse, Response
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -25,7 +27,7 @@ except (ImportError, FileNotFoundError, Exception) as e:
     logging.getLogger(__name__).info(f"ESC/POS thermal printing disabled: {e}")
 
 from database import get_db
-from models import LedgerRecord, InventoryItem, POSTransaction, POSItem, TransactionType, User, UserRole, Expense, SalesUser
+from models import LedgerRecord, InventoryItem, POSTransaction, POSItem, TransactionType, User, UserRole, Expense, SalesUser, Refund
 from schemas import (
     LedgerRecordCreate, LedgerRecordResponse,
     InventoryItemCreate, InventoryItemUpdate, InventoryItemResponse,
@@ -36,6 +38,8 @@ from schemas import (
     SalesUserCreate, SalesUserUpdate, SalesUserResponse,
     SalesUserPerformanceReportResponse
 )
+from schemas import POSClosureRequest, POSClosureResponse
+from schemas import RefundRequest, RefundResponse
 from config import TAX_RATE
 from auth import (
     verify_password, get_password_hash, create_access_token,
@@ -462,14 +466,23 @@ def get_pos_transactions(
     limit: int = 50,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Get all POS transactions with optional date filtering"""
+    """Get all POS transactions with optional date/search filtering"""
     query = db.query(POSTransaction)
     if start_date:
         query = query.filter(POSTransaction.transaction_date >= start_date)
     if end_date:
         query = query.filter(POSTransaction.transaction_date <= end_date)
+
+    search_term = (search or '').strip()
+    if search_term:
+        filters = [POSTransaction.transaction_number.ilike(f"%{search_term}%")]
+        if search_term.isdigit():
+            filters.append(POSTransaction.id == int(search_term))
+        query = query.filter(or_(*filters))
+
     return query.order_by(POSTransaction.transaction_date.desc()).offset(skip).limit(limit).all()
 
 
@@ -654,6 +667,157 @@ def generate_receipt_escpos(transaction_id: int, db: Session = Depends(get_db)):
     )
     
     # Note: Original thermal printer code removed for portable compatibility
+
+
+# ============= POS Cashier Closure =============
+@router.post("/pos/closures", response_model=POSClosureResponse)
+def create_pos_closure(
+    closure: POSClosureRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_cashier)
+):
+    """Create a cashier closure summary and optionally save it to the ledger
+
+    - Computes transactions for the given sales_user_id in the date range
+    - Returns summary and list of transactions
+    - If `save_to_ledger` is true, writes a single ledger record with the total
+    """
+    # normalize dates
+    start_date = closure.start_date or (datetime.utcnow() - timedelta(days=1))
+    end_date = closure.end_date or datetime.utcnow()
+
+    txns_query = db.query(POSTransaction).filter(
+        POSTransaction.transaction_date >= start_date,
+        POSTransaction.transaction_date <= end_date,
+        POSTransaction.sales_user_id == closure.sales_user_id
+    )
+    transactions = txns_query.order_by(POSTransaction.transaction_date.desc()).all()
+
+    total_sales = sum(t.total for t in transactions)
+    transaction_count = len(transactions)
+    by_method = {}
+    for t in transactions:
+        m = (t.payment_method.value if hasattr(t.payment_method, 'value') else str(t.payment_method)) or 'cash'
+        by_method[m] = by_method.get(m, 0.0) + (t.payment_received or t.total or 0.0)
+
+    # Optionally persist a ledger record
+    if closure.save_to_ledger:
+        ledger_record = LedgerRecord(
+            transaction_type=TransactionType.SALE,
+            description=f"Cashier closure - sales_user:{closure.sales_user_id}",
+            amount=total_sales,
+            balance=0.0,
+            reference_id=f"closure-{closure.sales_user_id}-{datetime.utcnow().isoformat()}",
+            payment_method=None,
+            notes=f"Transactions: {transaction_count}"
+        )
+        # compute balance based on last ledger record
+        last_record = db.query(LedgerRecord).order_by(LedgerRecord.id.desc()).first()
+        ledger_record.balance = (last_record.balance if last_record else 0.0) + total_sales
+        db.add(ledger_record)
+        db.commit()
+
+    # prepare response transactions (convert to response schema compatible dicts)
+    resp_txns = []
+    for t in transactions:
+        resp_txns.append(t)
+
+    return POSClosureResponse(
+        sales_user_id=closure.sales_user_id,
+        start_date=start_date,
+        end_date=end_date,
+        total_sales=total_sales,
+        transaction_count=transaction_count,
+        by_payment_method=by_method,
+        transactions=resp_txns
+    )
+
+
+# ============= POS Refund =============
+@router.post("/pos/transactions/{transaction_id}/refund", response_model=RefundResponse)
+def refund_pos_transaction(
+    transaction_id: int,
+    refund: RefundRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
+):
+    """Process a refund for a POS transaction (minimal):
+
+    - Validates refund amount <= original transaction total
+    - Optionally restocks inventory items
+    - Creates a LedgerRecord with TransactionType.RETURN and deducts from balance
+    """
+    # find transaction
+    transaction = db.query(POSTransaction).filter(POSTransaction.id == transaction_id).first()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    existing_refund = db.query(Refund).filter(Refund.transaction_id == transaction_id).first()
+    if existing_refund:
+        raise HTTPException(status_code=409, detail="Transaction has already been refunded")
+
+    existing_refund_ledger = db.query(LedgerRecord).filter(
+        LedgerRecord.transaction_type == TransactionType.RETURN,
+        LedgerRecord.reference_id == transaction.transaction_number
+    ).first()
+    if existing_refund_ledger:
+        raise HTTPException(status_code=409, detail="Transaction has already been refunded")
+
+    if refund.amount <= 0 or refund.amount > (transaction.total or 0.0):
+        raise HTTPException(status_code=400, detail="Invalid refund amount")
+
+    # Restock inventory if requested
+    restocked = False
+    if refund.restock:
+        items = db.query(POSItem).filter(POSItem.transaction_id == transaction_id).all()
+        for item in items:
+            inv = db.query(InventoryItem).filter(InventoryItem.id == item.inventory_id).first()
+            if inv:
+                inv.quantity = (inv.quantity or 0) + (item.quantity or 0)
+        restocked = True
+
+    # Create ledger record for the refund (treat as RETURN)
+    ledger_record = LedgerRecord(
+        transaction_type=TransactionType.RETURN,
+        description=f"Refund - {transaction.transaction_number}",
+        amount=refund.amount,
+        balance=0.0,
+        reference_id=transaction.transaction_number,
+        payment_method=(refund.refund_payment_method or transaction.payment_method),
+        notes=refund.reason or None
+    )
+
+    last_record = db.query(LedgerRecord).order_by(LedgerRecord.id.desc()).first()
+    ledger_record.balance = (last_record.balance if last_record else 0.0) - refund.amount
+
+    db.add(ledger_record)
+    db.flush()
+
+    # Persist Refund record
+    refund_record = Refund(
+        transaction_id=transaction_id,
+        amount=refund.amount,
+        refund_date=ledger_record.transaction_date,
+        reason=refund.reason,
+        restocked=restocked,
+        processed_by=(current_user.id if current_user is not None else None),
+        ledger_id=ledger_record.id
+    )
+    db.add(refund_record)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Transaction has already been refunded")
+
+    return RefundResponse(
+        transaction_id=transaction_id,
+        refunded_amount=refund.amount,
+        refund_date=ledger_record.transaction_date,
+        new_balance=ledger_record.balance,
+        restocked=restocked,
+        notes=ledger_record.notes
+    )
 
 
 # ============= Reports Routes =============

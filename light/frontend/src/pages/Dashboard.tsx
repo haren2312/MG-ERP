@@ -59,7 +59,7 @@ function Dashboard() {
           <h3>{t('total_sales')}</h3>
           <div className="value">${stats.sales.total_sales.toFixed(2)}</div>
           <p style={{ color: '#7f8c8d', marginTop: '10px' }}>
-            {stats.sales.total_transactions} transactions
+            {stats.sales.total_transactions} {t('transactions')}
           </p>
         </div>
 
@@ -67,7 +67,7 @@ function Dashboard() {
           <h3>{t('current_balance')}</h3>
           <div className="value">${stats.ledger.current_balance.toFixed(2)}</div>
           <p style={{ color: '#27ae60', marginTop: '10px' }}>
-            Income: ${stats.ledger.total_income.toFixed(2)}
+            {t('income')}: ${stats.ledger.total_income.toFixed(2)}
           </p>
         </div>
 
@@ -75,7 +75,7 @@ function Dashboard() {
           <h3>{t('inventory_value')}</h3>
           <div className="value">${stats.inventory.total_value.toFixed(2)}</div>
           <p style={{ color: '#7f8c8d', marginTop: '10px' }}>
-            {stats.inventory.total_items} items
+            {stats.inventory.total_items} {t('items')}
           </p>
         </div>
 

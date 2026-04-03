@@ -123,6 +123,26 @@ class POSItem(Base):
     inventory_item = relationship("InventoryItem", back_populates="pos_items")
 
 
+class Refund(Base):
+    """Records refunds issued against POS transactions"""
+    __tablename__ = "refunds"
+
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(Integer, ForeignKey("pos_transactions.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    refund_date = Column(DateTime, default=datetime.utcnow, nullable=False)
+    reason = Column(Text, nullable=True)
+    restocked = Column(Boolean, default=False)
+    processed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    ledger_id = Column(Integer, ForeignKey("ledger_records.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    transaction = relationship("POSTransaction")
+    processed_user = relationship("User")
+
+
 class User(Base):
     """User authentication and authorization"""
     __tablename__ = "users"

@@ -158,8 +158,50 @@ class POSTransactionResponse(POSTransactionBase):
     change_returned: float
     sales_user_id: Optional[int]
     ledger_id: Optional[int]
+    created_at: datetime
     items: List[POSItemResponse]
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# POS Cashier Closure Schemas
+class POSClosureRequest(BaseModel):
+    sales_user_id: int
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    save_to_ledger: bool = True
+
+
+class POSClosureResponse(BaseModel):
+    sales_user_id: int
+    start_date: datetime
+    end_date: datetime
+    total_sales: float
+    transaction_count: int
+    by_payment_method: dict
+    transactions: List[POSTransactionResponse]
+
+    class Config:
+        from_attributes = True
+
+
+# Refund Schemas
+class RefundRequest(BaseModel):
+    amount: float = Field(gt=0)
+    reason: Optional[str] = None
+    restock: bool = False
+    refund_payment_method: Optional[PaymentMethod] = None
+
+
+class RefundResponse(BaseModel):
+    transaction_id: int
+    refunded_amount: float
+    refund_date: datetime
+    new_balance: float
+    restocked: bool
+    notes: Optional[str] = None
 
     class Config:
         from_attributes = True

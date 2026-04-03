@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { inventoryAPI } from '../api';
+import { useTranslation } from 'react-i18next';
+import '../i18n';
 
 interface InventoryItem {
   id: number;
@@ -33,6 +35,8 @@ function Inventory() {
     reorder_level: '10',
   });
 
+  const { t, i18n } = useTranslation();
+
   useEffect(() => {
     loadItems();
   }, []);
@@ -44,7 +48,7 @@ function Inventory() {
       setItems(response.data);
       setError('');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load inventory');
+      setError(err.response?.data?.detail || t('Failed_to_load_inventory'));
     } finally {
       setLoading(false);
     }
@@ -255,9 +259,9 @@ function Inventory() {
   };
 
   const getStockStatus = (quantity: number, reorderLevel: number) => {
-    if (quantity === 0) return { color: '#e74c3c', text: 'Out of Stock' };
-    if (quantity <= reorderLevel) return { color: '#f39c12', text: 'Low Stock' };
-    return { color: '#27ae60', text: 'In Stock' };
+    if (quantity === 0) return { color: '#e74c3c', text: t('Out_of_Stock') };
+    if (quantity <= reorderLevel) return { color: '#f39c12', text: t('Low_Stock') };
+    return { color: '#27ae60', text: t('In_Stock') };
   };
 
   const filteredItems = items.filter(item => 
@@ -268,13 +272,13 @@ function Inventory() {
 
   return (
     <div>
-      <h1>📦 Inventory Management</h1>
+      <h1>📦 {t('inventory_title')}</h1>
 
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
           <input
             type="text"
-            placeholder="Search by name, SKU, or barcode..."
+            placeholder={t('search_placeholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && loadItems()}
@@ -286,10 +290,10 @@ function Inventory() {
               onClick={loadItems}
               style={{ marginRight: '10px' }}
             >
-              🔍 Search
+              🔍 {t('search')}
             </button>
             <button className="button button-primary" onClick={() => !showForm ? setShowForm(true) : handleCancelEdit()}>
-              {showForm ? 'Cancel' : '+ Add Item'}
+              {showForm ? t('cancel') : `+ ${t('add_item')}`}
             </button>
           </div>
         </div>
@@ -297,11 +301,11 @@ function Inventory() {
         {showForm && (
           <form onSubmit={handleSubmit} style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
             <h3 style={{ marginTop: 0, color: '#2c3e50' }}>
-              {editingItem ? `Edit Product: ${editingItem.name}` : 'Add New Product'}
+              {editingItem ? `${t('edit_product')}: ${editingItem.name}` : t('add_new_product')}
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               <div className="form-group">
-                <label>Product Name *</label>
+                <label>{t('product_name')} *</label>
                 <input
                   type="text"
                   required
@@ -320,7 +324,7 @@ function Inventory() {
                 />
               </div>
               <div className="form-group">
-                <label>SKU * {editingItem && <span style={{ fontSize: '12px', color: '#7f8c8d' }}>(Cannot be changed)</span>}</label>
+                <label>{t('sku')} * {editingItem && <span style={{ fontSize: '12px', color: '#7f8c8d' }}>(Cannot be changed)</span>}</label>
                 <input
                   type="text"
                   required
@@ -331,13 +335,13 @@ function Inventory() {
                 />
               </div>
               <div className="form-group">
-                <label>Barcode <span style={{ fontSize: '12px', color: '#7f8c8d' }}>(Auto-generated, can be edited)</span></label>
+                <label>{t('barcode')} <span style={{ fontSize: '12px', color: '#7f8c8d' }}>(Auto-generated, can be edited)</span></label>
                 <div style={{ display: 'flex', gap: '5px' }}>
                   <input
                     type="text"
                     value={formData.barcode}
                     onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                    placeholder="Auto-generated from product name"
+                    placeholder={t('barcode_placeholder')}
                   />
                   <button
                     type="button"
@@ -345,14 +349,14 @@ function Inventory() {
                     className="button"
                     style={{ padding: '8px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
                     disabled={!formData.name}
-                    title="Regenerate barcode"
+                    title={t('regenerate_barcode')}
                   >
-                    🔄 Regenerate
+                    🔄 {t('regenerate_barcode')}
                   </button>
                 </div>
               </div>
               <div className="form-group">
-                <label>Category</label>
+                <label>{t('category')}</label>
                 <input
                   type="text"
                   value={formData.category}
@@ -360,7 +364,7 @@ function Inventory() {
                 />
               </div>
               <div className="form-group">
-                <label>Unit Price *</label>
+                <label>{t('unit_price')} *</label>
                 <input
                   type="number"
                   step="0.01"
@@ -370,7 +374,7 @@ function Inventory() {
                 />
               </div>
               <div className="form-group">
-                <label>Cost Price *</label>
+                <label>{t('cost_price')} *</label>
                 <input
                   type="number"
                   step="0.01"
@@ -380,7 +384,7 @@ function Inventory() {
                 />
               </div>
               <div className="form-group">
-                <label>Quantity *</label>
+                <label>{t('quantity')} *</label>
                 <input
                   type="number"
                   required
@@ -389,7 +393,7 @@ function Inventory() {
                 />
               </div>
               <div className="form-group">
-                <label>Reorder Level *</label>
+                <label>{t('reorder_level')} *</label>
                 <input
                   type="number"
                   required
@@ -400,11 +404,11 @@ function Inventory() {
             </div>
             <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
               <button type="submit" className="button button-success">
-                {editingItem ? '💾 Update Item' : '✓ Create Item'}
+                {editingItem ? `💾 ${t('update_item')}` : `✓ ${t('create_item')}`}
               </button>
               {editingItem && (
                 <button type="button" className="button" onClick={handleCancelEdit} style={{ backgroundColor: '#95a5a6', color: 'white' }}>
-                  Cancel
+                  {t('cancel')}
                 </button>
               )}
             </div>
@@ -412,7 +416,7 @@ function Inventory() {
         )}
 
         {loading ? (
-          <p>Loading inventory...</p>
+          <p>{t('loading_inventory')}</p>
         ) : error ? (
           <p style={{ color: 'red' }}>{error}</p>
         ) : (
@@ -420,15 +424,15 @@ function Inventory() {
             <table>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>SKU</th>
-                  <th>Barcode</th>
-                  <th>Category</th>
-                  <th>Unit Price</th>
-                  <th>Cost Price</th>
-                  <th>Quantity</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th>{t('name')}</th>
+                  <th>{t('sku')}</th>
+                  <th>{t('barcode')}</th>
+                  <th>{t('category')}</th>
+                  <th>{t('unit_price')}</th>
+                  <th>{t('cost_price')}</th>
+                  <th>{t('quantity')}</th>
+                  <th>{t('status')}</th>
+                  <th>{t('actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -460,23 +464,23 @@ function Inventory() {
                             className="button button-primary"
                             onClick={() => handleEdit(item)}
                             style={{ padding: '5px 10px', fontSize: '12px' }}
-                            title="Edit item"
+                            title={t('edit_item')}
                           >
-                            ✏️ Edit
+                            ✏️ {t('edit')}
                           </button>
                           <button
                             className="button"
                             onClick={() => handleShowBarcode(item)}
                             style={{ padding: '5px 10px', fontSize: '12px', backgroundColor: '#3498db', color: 'white' }}
-                            title="Print barcode"
+                            title={t('print_barcode')}
                           >
-                            🏷️ Barcode
+                            🏷️ {t('barcode')}
                           </button>
                           <button
                             className="button button-danger"
                             onClick={() => handleDelete(item.id)}
                             style={{ padding: '5px 10px', fontSize: '12px' }}
-                            title="Delete item"
+                            title={t('delete_item')}
                           >
                             🗑️
                           </button>

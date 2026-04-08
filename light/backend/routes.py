@@ -4,7 +4,7 @@ Includes Authentication, POS, Inventory, Ledger, and Reports
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse, Response
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -27,7 +27,7 @@ except (ImportError, FileNotFoundError, Exception) as e:
     logging.getLogger(__name__).info(f"ESC/POS thermal printing disabled: {e}")
 
 from database import get_db
-from models import LedgerRecord, InventoryItem, POSTransaction, POSItem, TransactionType, User, UserRole, Expense, SalesUser, Refund
+from models import LedgerRecord, InventoryItem, POSTransaction, POSItem, TransactionType, User, UserRole, Expense, SalesUser, Refund, RefundItem
 from schemas import (
     LedgerRecordCreate, LedgerRecordResponse,
     InventoryItemCreate, InventoryItemUpdate, InventoryItemResponse,
@@ -40,6 +40,7 @@ from schemas import (
 )
 from schemas import POSClosureRequest, POSClosureResponse
 from schemas import RefundRequest, RefundResponse
+from schemas import ItemRefundRequest, ItemRefundResponse
 from config import TAX_RATE
 from auth import (
     verify_password, get_password_hash, create_access_token,
@@ -817,6 +818,133 @@ def refund_pos_transaction(
         new_balance=ledger_record.balance,
         restocked=restocked,
         notes=ledger_record.notes
+    )
+
+
+@router.post("/pos/transactions/{transaction_id}/refund-item", response_model=ItemRefundResponse)
+def refund_pos_transaction_item(
+    transaction_id: int,
+    refund: ItemRefundRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
+):
+    """Refund a specific item (and quantity) from a POS transaction."""
+    transaction = db.query(POSTransaction).filter(POSTransaction.id == transaction_id).first()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    pos_item = db.query(POSItem).filter(
+        POSItem.id == refund.pos_item_id,
+        POSItem.transaction_id == transaction_id
+    ).first()
+    if not pos_item:
+        raise HTTPException(status_code=404, detail="Transaction item not found")
+
+    existing_item_refund = db.query(RefundItem).filter(
+        RefundItem.transaction_id == transaction_id,
+        RefundItem.pos_item_id == refund.pos_item_id
+    ).first()
+    if existing_item_refund:
+        raise HTTPException(status_code=409, detail="This item has already been refunded")
+
+    refunded_qty = db.query(func.coalesce(func.sum(RefundItem.refunded_quantity), 0)).filter(
+        RefundItem.transaction_id == transaction_id,
+        RefundItem.pos_item_id == refund.pos_item_id
+    ).scalar() or 0
+
+    refunded_amount = db.query(func.coalesce(func.sum(RefundItem.refunded_amount), 0.0)).filter(
+        RefundItem.transaction_id == transaction_id,
+        RefundItem.pos_item_id == refund.pos_item_id
+    ).scalar() or 0.0
+
+    remaining_qty = (pos_item.quantity or 0) - int(refunded_qty)
+    if remaining_qty <= 0:
+        raise HTTPException(status_code=409, detail="This item has already been fully refunded")
+
+    if refund.quantity > remaining_qty:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Refund quantity exceeds remaining quantity ({remaining_qty})"
+        )
+
+    # Apply the transaction-level effective ratio so item refunds reflect tax/discount impacts.
+    base_subtotal = transaction.subtotal or 0.0
+    effective_ratio = (transaction.total / base_subtotal) if base_subtotal > 0 else 1.0
+    line_refund_base = (pos_item.unit_price or 0.0) * refund.quantity
+    line_refund_amount = round(line_refund_base * effective_ratio, 2)
+
+    max_item_amount = round((pos_item.subtotal or 0.0) * effective_ratio, 2)
+    remaining_item_amount = round(max_item_amount - refunded_amount, 2)
+    if remaining_item_amount <= 0:
+        raise HTTPException(status_code=409, detail="This item has no refundable amount remaining")
+
+    if refund.quantity == remaining_qty:
+        line_refund_amount = remaining_item_amount
+    else:
+        line_refund_amount = min(line_refund_amount, remaining_item_amount)
+
+    if line_refund_amount <= 0:
+        raise HTTPException(status_code=400, detail="Calculated refund amount is invalid")
+
+    if refund.restock:
+        inv = db.query(InventoryItem).filter(InventoryItem.id == pos_item.inventory_id).first()
+        if inv:
+            inv.quantity = (inv.quantity or 0) + refund.quantity
+
+    ledger_record = LedgerRecord(
+        transaction_type=TransactionType.RETURN,
+        description=f"Item refund - {transaction.transaction_number} - {pos_item.product_name}",
+        amount=line_refund_amount,
+        balance=0.0,
+        reference_id=transaction.transaction_number,
+        payment_method=(refund.refund_payment_method or transaction.payment_method),
+        notes=refund.reason or None
+    )
+
+    last_record = db.query(LedgerRecord).order_by(LedgerRecord.id.desc()).first()
+    ledger_record.balance = (last_record.balance if last_record else 0.0) - line_refund_amount
+
+    db.add(ledger_record)
+    db.flush()
+
+    refund_record = Refund(
+        transaction_id=transaction_id,
+        amount=line_refund_amount,
+        refund_date=ledger_record.transaction_date,
+        reason=refund.reason,
+        restocked=bool(refund.restock),
+        processed_by=(current_user.id if current_user is not None else None),
+        ledger_id=ledger_record.id
+    )
+    db.add(refund_record)
+    db.flush()
+
+    refund_item = RefundItem(
+        refund_id=refund_record.id,
+        transaction_id=transaction_id,
+        pos_item_id=pos_item.id,
+        inventory_id=pos_item.inventory_id,
+        refunded_quantity=refund.quantity,
+        refunded_amount=line_refund_amount,
+    )
+    db.add(refund_item)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Failed to process item refund")
+
+    return ItemRefundResponse(
+        transaction_id=transaction_id,
+        pos_item_id=pos_item.id,
+        refunded_quantity=refund.quantity,
+        refunded_amount=line_refund_amount,
+        refund_date=ledger_record.transaction_date,
+        new_balance=ledger_record.balance,
+        restocked=bool(refund.restock),
+        remaining_quantity=remaining_qty - refund.quantity,
+        notes=ledger_record.notes,
     )
 
 

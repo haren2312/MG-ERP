@@ -207,6 +207,29 @@ class RefundResponse(BaseModel):
         from_attributes = True
 
 
+class ItemRefundRequest(BaseModel):
+    pos_item_id: int
+    quantity: int = Field(gt=0)
+    reason: Optional[str] = None
+    restock: bool = False
+    refund_payment_method: Optional[PaymentMethod] = None
+
+
+class ItemRefundResponse(BaseModel):
+    transaction_id: int
+    pos_item_id: int
+    refunded_quantity: int
+    refunded_amount: float
+    refund_date: datetime
+    new_balance: float
+    restocked: bool
+    remaining_quantity: int
+    notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # Report Schemas
 class SalesReportResponse(BaseModel):
     total_sales: float

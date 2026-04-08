@@ -9,6 +9,7 @@ import POS from './pages/POS';
 import Ledger from './pages/Ledger';
 import Reports from './pages/Reports';
 import Expenses from './pages/Expenses';
+import TransactionsHistory from './pages/TransactionsHistory';
 import Users from './pages/Users';
 import SalesUsers from './pages/SalesUsers';
 import SalesUserReport from './pages/SalesUserReport';
@@ -64,6 +65,11 @@ function MainApp() {
           <li className={activeMenu === 'pos' ? 'active' : ''}>
             <Link to="/pos" onClick={() => setActiveMenu('pos')}>
               🛒 {t('pos_title')}
+            </Link>
+          </li>
+          <li className={activeMenu === 'transactions-history' ? 'active' : ''}>
+            <Link to="/transactions-history" onClick={() => setActiveMenu('transactions-history')}>
+              🧾 {t('transactions_history_title')}
             </Link>
           </li>
           {hasRole('manager', 'super_admin') && (
@@ -138,6 +144,11 @@ function MainApp() {
           <Route path="/pos" element={
             <ProtectedRoute>
               <POS />
+            </ProtectedRoute>
+          } />
+          <Route path="/transactions-history" element={
+            <ProtectedRoute>
+              <TransactionsHistory />
             </ProtectedRoute>
           } />
           <Route path="/ledger" element={

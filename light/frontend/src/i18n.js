@@ -110,6 +110,7 @@ const resources = {
         "reports_title": "Reports",
         "sales_user_report_title": "Sales User Report",
         "pos_title": "POS",
+        "transactions_history_title": "Transactions History",
 
     }
   },
@@ -215,6 +216,7 @@ const resources = {
     "reports_title": "Berichte",
     "sales_user_report_title": "Vertriebsbericht",
     "pos_title": "Kasse (POS)",
+    "transactions_history_title": "Transaktionsverlauf",
   }
 },ar: {
   translation: {
@@ -319,6 +321,7 @@ const resources = {
     "reports_title": "التقارير",
     "sales_user_report_title": "تقرير موظفي المبيعات",
     "pos_title": "نقطة البيع",
+    "transactions_history_title": "سجل المعاملات",
   }
 }
 };

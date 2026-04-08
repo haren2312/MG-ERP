@@ -79,6 +79,8 @@ export const posAPI = {
     api.post('/pos/closures', data),
   refundTransaction: (transactionId: number, data: any) =>
     api.post(`/pos/transactions/${transactionId}/refund`, data),
+  refundTransactionItem: (transactionId: number, data: any) =>
+    api.post(`/pos/transactions/${transactionId}/refund-item`, data),
 };
 
 // Ledger API

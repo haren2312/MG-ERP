@@ -141,6 +141,27 @@ class Refund(Base):
     # Relationships
     transaction = relationship("POSTransaction")
     processed_user = relationship("User")
+    items = relationship("RefundItem", back_populates="refund", cascade="all, delete-orphan")
+
+
+class RefundItem(Base):
+    """Line-item details for each refund event"""
+    __tablename__ = "refund_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    refund_id = Column(Integer, ForeignKey("refunds.id"), nullable=False)
+    transaction_id = Column(Integer, ForeignKey("pos_transactions.id"), nullable=False)
+    pos_item_id = Column(Integer, ForeignKey("pos_items.id"), nullable=False)
+    inventory_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=False)
+    refunded_quantity = Column(Integer, nullable=False)
+    refunded_amount = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    refund = relationship("Refund", back_populates="items")
+    transaction = relationship("POSTransaction")
+    pos_item = relationship("POSItem")
+    inventory_item = relationship("InventoryItem")
 
 
 class User(Base):

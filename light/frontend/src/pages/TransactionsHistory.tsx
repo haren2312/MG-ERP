@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { posAPI } from '../api';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../AuthContext';
 import '../i18n';
 
 interface TransactionItem {
@@ -53,6 +54,8 @@ function toIsoDateEnd(date: string): string | undefined {
 
 function TransactionsHistory() {
   const { t } = useTranslation();
+  const { hasRole } = useAuth();
+  const canRefund = hasRole('manager', 'super_admin');
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -152,7 +155,7 @@ function TransactionsHistory() {
         pos_item_id: item.id,
         quantity: refundQty,
         reason: (refundReasonByItem[item.id] || '').trim() || undefined,
-        restock: !!refundRestockByItem[item.id],
+        restock: refundRestockByItem[item.id] ?? true,
       });
 
       alert('Item refund processed successfully');
@@ -309,10 +312,10 @@ function TransactionsHistory() {
                                     <th>Qty</th>
                                     <th>Unit Price</th>
                                     <th>Subtotal</th>
-                                    <th>Refund Qty</th>
-                                    <th>Reason</th>
-                                    <th>Restock</th>
-                                    <th>Action</th>
+                                    {canRefund && <th>Refund Qty</th>}
+                                    {canRefund && <th>Reason</th>}
+                                    {canRefund && <th>Restock</th>}
+                                    {canRefund && <th>Action</th>}
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -322,6 +325,7 @@ function TransactionsHistory() {
                                       <td>{item.quantity}</td>
                                       <td>{formatCurrency(item.unit_price)}</td>
                                       <td>{formatCurrency(item.subtotal)}</td>
+                                      {canRefund && (
                                       <td style={{ minWidth: 110 }}>
                                         <input
                                           type="number"
@@ -337,6 +341,8 @@ function TransactionsHistory() {
                                           style={{ width: '100%' }}
                                         />
                                       </td>
+                                      )}
+                                      {canRefund && (
                                       <td style={{ minWidth: 180 }}>
                                         <input
                                           type="text"
@@ -349,6 +355,8 @@ function TransactionsHistory() {
                                           style={{ width: '100%' }}
                                         />
                                       </td>
+                                      )}
+                                      {canRefund && (
                                       <td>
                                         <input
                                           type="checkbox"
@@ -359,6 +367,8 @@ function TransactionsHistory() {
                                           disabled={refundingItemId === item.id}
                                         />
                                       </td>
+                                      )}
+                                      {canRefund && (
                                       <td>
                                         <button
                                           className="button button-danger"
@@ -368,6 +378,7 @@ function TransactionsHistory() {
                                           {refundingItemId === item.id ? 'Processing...' : 'Refund Item'}
                                         </button>
                                       </td>
+                                      )}
                                     </tr>
                                   ))}
                                 </tbody>

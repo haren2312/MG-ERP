@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { inventoryAPI, posAPI, salesUserAPI } from '../api';
+import { useAuth } from '../AuthContext';
 
 interface CartItem {
   inventory_id: number;
@@ -24,6 +25,8 @@ interface RefundTransaction {
 }
 
 function POS() {
+  const { hasRole } = useAuth();
+  const canManageRefunds = hasRole('manager', 'super_admin');
   const [items, setItems] = useState<any[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [salesUsers, setSalesUsers] = useState<SalesUser[]>([]);
@@ -333,13 +336,15 @@ function POS() {
             {closureLoading ? 'Preparing...' : 'Close Cashier'}
           </button>
 
-          <button
-            onClick={() => setShowRefundModal(true)}
-            className="button"
-            style={{ padding: '10px 14px', backgroundColor: '#e67e22', color: 'white', borderRadius: 6 }}
-          >
-            Refund
-          </button>
+          {canManageRefunds && (
+            <button
+              onClick={() => setShowRefundModal(true)}
+              className="button"
+              style={{ padding: '10px 14px', backgroundColor: '#e67e22', color: 'white', borderRadius: 6 }}
+            >
+              Refund
+            </button>
+          )}
         </div>
       </div>
 
@@ -543,6 +548,7 @@ function POS() {
                   {loading ? 'Processing...' : 'Complete Sale'}
                 </button>
                 {/* Refund Section (minimal) */}
+                {canManageRefunds && (
                 <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #ddd' }}>
                   <h4 style={{ marginBottom: '8px' }}>Refund Transaction (minimal)</h4>
                   <div className="form-group">
@@ -615,6 +621,7 @@ function POS() {
                     {refundLoading ? 'Processing...' : 'Process Refund'}
                   </button>
                 </div>
+                )}
                 <button
                   onClick={async () => {
                     if (!selectedUserId) {
@@ -750,7 +757,7 @@ function POS() {
       )}
 
       {/* Refund Modal (accessible from header Refund button) */}
-      {showRefundModal && (
+      {canManageRefunds && showRefundModal && (
         <div
           style={{
             position: 'fixed',

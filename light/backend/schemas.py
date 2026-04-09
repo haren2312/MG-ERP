@@ -211,7 +211,7 @@ class ItemRefundRequest(BaseModel):
     pos_item_id: int
     quantity: int = Field(gt=0)
     reason: Optional[str] = None
-    restock: bool = False
+    restock: bool = True
     refund_payment_method: Optional[PaymentMethod] = None
 
 

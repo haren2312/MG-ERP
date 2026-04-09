@@ -205,7 +205,8 @@ def get_ledger_records(
     skip: int = 0,
     limit: int = 100,
     transaction_type: Optional[TransactionType] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
 ):
     """Get all ledger records with optional filtering"""
     query = db.query(LedgerRecord)
@@ -215,7 +216,11 @@ def get_ledger_records(
 
 
 @router.post("/ledger", response_model=LedgerRecordResponse)
-def create_ledger_record(record: LedgerRecordCreate, db: Session = Depends(get_db)):
+def create_ledger_record(
+    record: LedgerRecordCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
+):
     """Create a new ledger record"""
     # Get current balance
     last_record = db.query(LedgerRecord).order_by(LedgerRecord.id.desc()).first()
@@ -235,7 +240,11 @@ def create_ledger_record(record: LedgerRecordCreate, db: Session = Depends(get_d
 
 
 @router.get("/ledger/{record_id}", response_model=LedgerRecordResponse)
-def get_ledger_record(record_id: int, db: Session = Depends(get_db)):
+def get_ledger_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
+):
     """Get a specific ledger record"""
     record = db.query(LedgerRecord).filter(LedgerRecord.id == record_id).first()
     if not record:
@@ -250,7 +259,8 @@ def get_inventory_items(
     limit: int = 100,
     category: Optional[str] = None,
     search: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_cashier)
 ):
     """Get all inventory items with optional filtering"""
     query = db.query(InventoryItem)
@@ -266,7 +276,11 @@ def get_inventory_items(
 
 
 @router.post("/inventory", response_model=InventoryItemResponse)
-def create_inventory_item(item: InventoryItemCreate, db: Session = Depends(get_db)):
+def create_inventory_item(
+    item: InventoryItemCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
+):
     """Create a new inventory item"""
     # Check for duplicate SKU
     existing = db.query(InventoryItem).filter(InventoryItem.sku == item.sku).first()
@@ -281,7 +295,11 @@ def create_inventory_item(item: InventoryItemCreate, db: Session = Depends(get_d
 
 
 @router.get("/inventory/{item_id}", response_model=InventoryItemResponse)
-def get_inventory_item(item_id: int, db: Session = Depends(get_db)):
+def get_inventory_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_cashier)
+):
     """Get a specific inventory item"""
     item = db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
     if not item:
@@ -293,7 +311,8 @@ def get_inventory_item(item_id: int, db: Session = Depends(get_db)):
 def update_inventory_item(
     item_id: int,
     item_update: InventoryItemUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
 ):
     """Update an inventory item"""
     db_item = db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
@@ -311,7 +330,11 @@ def update_inventory_item(
 
 
 @router.delete("/inventory/{item_id}")
-def delete_inventory_item(item_id: int, db: Session = Depends(get_db)):
+def delete_inventory_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_super_admin)
+):
     """Delete an inventory item"""
     db_item = db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
     if not db_item:
@@ -323,7 +346,11 @@ def delete_inventory_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/inventory/{item_id}/barcode")
-def generate_barcode(item_id: int, db: Session = Depends(get_db)):
+def generate_barcode(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
+):
     """Generate barcode image for an inventory item"""
     import logging
     import sys
@@ -399,7 +426,11 @@ def generate_barcode(item_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/inventory/{item_id}/barcode/escpos")
-def generate_barcode_escpos(item_id: int, db: Session = Depends(get_db)):
+def generate_barcode_escpos(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_manager)
+):
     """Generate ESC/POS commands for printing barcode on thermal printer"""
     
     if not ESCPOS_AVAILABLE:
@@ -468,7 +499,8 @@ def get_pos_transactions(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     search: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_cashier)
 ):
     """Get all POS transactions with optional date/search filtering"""
     query = db.query(POSTransaction)
@@ -488,7 +520,11 @@ def get_pos_transactions(
 
 
 @router.post("/pos/transactions", response_model=POSTransactionResponse)
-def create_pos_transaction(transaction: POSTransactionCreate, db: Session = Depends(get_db)):
+def create_pos_transaction(
+    transaction: POSTransactionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_cashier)
+):
     """Create a new POS transaction"""
     # Generate transaction number
     trans_number = f"POS-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
@@ -583,7 +619,11 @@ def create_pos_transaction(transaction: POSTransactionCreate, db: Session = Depe
 
 
 @router.get("/pos/transactions/{transaction_id}", response_model=POSTransactionResponse)
-def get_pos_transaction(transaction_id: int, db: Session = Depends(get_db)):
+def get_pos_transaction(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_cashier)
+):
     """Get a specific POS transaction"""
     transaction = db.query(POSTransaction).filter(POSTransaction.id == transaction_id).first()
     if not transaction:
@@ -592,7 +632,11 @@ def get_pos_transaction(transaction_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/pos/transactions/{transaction_id}/receipt/escpos")
-def generate_receipt_escpos(transaction_id: int, db: Session = Depends(get_db)):
+def generate_receipt_escpos(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_cashier)
+):
     """Generate ESC/POS receipt for a POS transaction"""
     
     if not ESCPOS_AVAILABLE:

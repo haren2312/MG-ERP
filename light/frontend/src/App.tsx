@@ -19,7 +19,7 @@ import './i18n';
 import LanguageSelector from './components/LanguageSelector';
 
 function MainApp() {
-  const [activeMenu, setActiveMenu] = useState('dashboard');
+  const [activeMenu, setActiveMenu] = useState('pos');
   const { user, logout, hasRole } = useAuth();
   const { t, i18n } = useTranslation();
   console.log("Current detected language:", i18n.language);
@@ -50,11 +50,13 @@ function MainApp() {
           <LanguageSelector />
         </div>
         <ul className="nav-menu">
+          {hasRole('manager', 'super_admin') && (
           <li className={activeMenu === 'dashboard' ? 'active' : ''}>
-            <Link to="/" onClick={() => setActiveMenu('dashboard')}>
+            <Link to="/dashboard" onClick={() => setActiveMenu('dashboard')}>
               📊 {t('dashboard_title')}
             </Link>
           </li>
+          )}
           {hasRole('manager', 'super_admin') && (
             <li className={activeMenu === 'inventory' ? 'active' : ''}>
               <Link to="/inventory" onClick={() => setActiveMenu('inventory')}>
@@ -133,6 +135,11 @@ function MainApp() {
         <Routes>
           <Route path="/" element={
             <ProtectedRoute>
+              <POS />
+            </ProtectedRoute>
+          } />
+          <Route path="/dashboard" element={
+            <ProtectedRoute requiredRole="manager">
               <Dashboard />
             </ProtectedRoute>
           } />

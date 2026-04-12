@@ -33,6 +33,7 @@ function POS() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [paymentReceived, setPaymentReceived] = useState('');
   const [discount, setDiscount] = useState('0');
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -173,8 +174,21 @@ function POS() {
       
       setLastTransactionId(response.data.id);
       setShowSuccessModal(true);
+
+      const phone = customerPhone.trim();
+      if (phone) {
+        try {
+          await posAPI.sendReceiptWhatsApp(response.data.id, { phone_number: phone });
+          alert('WhatsApp e-receipt sent successfully');
+        } catch (waErr: any) {
+          console.error('Failed to send WhatsApp e-receipt:', waErr);
+          alert(waErr.response?.data?.detail || 'Sale completed, but WhatsApp e-receipt failed to send.');
+        }
+      }
+
       setCart([]);
       setCustomerName('');
+      setCustomerPhone('');
       setPaymentReceived('');
       setDiscount('0');
       loadInventory();
@@ -487,6 +501,16 @@ function POS() {
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="Enter customer name"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Phone Number (WhatsApp Optional)</label>
+                  <input
+                    type="text"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    placeholder="e.g. 201234567890"
                   />
                 </div>
 

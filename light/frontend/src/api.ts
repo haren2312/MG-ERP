@@ -81,6 +81,8 @@ export const posAPI = {
     api.post(`/pos/transactions/${transactionId}/refund`, data),
   refundTransactionItem: (transactionId: number, data: any) =>
     api.post(`/pos/transactions/${transactionId}/refund-item`, data),
+  sendReceiptWhatsApp: (transactionId: number, data: { phone_number: string }) =>
+    api.post(`/pos/transactions/${transactionId}/receipt/whatsapp`, data),
 };
 
 // Ledger API

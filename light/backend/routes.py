@@ -11,6 +11,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import uuid
 import io
+import logging
 import barcode
 from barcode.writer import ImageWriter
 
@@ -41,13 +42,47 @@ from schemas import (
 from schemas import POSClosureRequest, POSClosureResponse
 from schemas import RefundRequest, RefundResponse
 from schemas import ItemRefundRequest, ItemRefundResponse
+from schemas import WhatsAppReceiptRequest, WhatsAppReceiptResponse
 from config import TAX_RATE
+from whatsapp_client import WhatsAppClient
 from auth import (
     verify_password, get_password_hash, create_access_token,
     get_current_user, get_current_cashier, get_current_manager, get_current_super_admin
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _build_receipt_lines(transaction: POSTransaction, items: List[POSItem]) -> List[str]:
+    """Build receipt text lines shared by print and WhatsApp e-receipt."""
+    lines: List[str] = []
+    lines.append("RECEIPT")
+    lines.append("================================")
+    lines.append(f"Transaction: {transaction.transaction_number}")
+    lines.append(f"Date: {transaction.transaction_date.strftime('%Y-%m-%d %H:%M')}")
+    if transaction.customer_name:
+        lines.append(f"Customer: {transaction.customer_name}")
+    lines.append("================================")
+
+    for item in items:
+        item_name = item.product_name or "Unknown Item"
+        line_total = item.subtotal if item.subtotal is not None else (item.unit_price * item.quantity)
+        lines.append(f"{item_name}")
+        lines.append(f"  {item.quantity} x ${item.unit_price:.2f} = ${line_total:.2f}")
+
+    lines.append("================================")
+    lines.append(f"Subtotal: ${transaction.subtotal:.2f}")
+    if transaction.discount > 0:
+        lines.append(f"Discount: -${transaction.discount:.2f}")
+    if transaction.tax > 0:
+        lines.append(f"Tax: ${transaction.tax:.2f}")
+    lines.append(f"TOTAL: ${transaction.total:.2f}")
+    payment_method = transaction.payment_method.value if hasattr(transaction.payment_method, 'value') else str(transaction.payment_method)
+    lines.append(f"Payment: {payment_method}")
+    lines.append("")
+    lines.append("Thank you for your business!")
+    return lines
 
 
 # ============= Authentication Routes =============
@@ -526,21 +561,41 @@ def create_pos_transaction(
     current_user: User = Depends(get_current_cashier)
 ):
     """Create a new POS transaction"""
+    logger.info(
+        "POS create start | user_id=%s | sales_user_id=%s | items_count=%s | payment_method=%s | payment_received=%s | discount=%s",
+        getattr(current_user, "id", None),
+        transaction.sales_user_id,
+        len(transaction.items or []),
+        transaction.payment_method,
+        transaction.payment_received,
+        transaction.discount,
+    )
+
     # Generate transaction number
     trans_number = f"POS-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+    logger.info("POS transaction_number generated | transaction_number=%s", trans_number)
     
     # Calculate totals
     subtotal = 0.0
     pos_items = []
     
     for item in transaction.items:
+        logger.debug("POS item validating | inventory_id=%s | quantity=%s", item.inventory_id, item.quantity)
         # Get inventory item
         inv_item = db.query(InventoryItem).filter(InventoryItem.id == item.inventory_id).first()
         if not inv_item:
+            logger.warning("POS item not found | transaction_number=%s | inventory_id=%s", trans_number, item.inventory_id)
             raise HTTPException(status_code=404, detail=f"Inventory item {item.inventory_id} not found")
         
         # Check stock
         if inv_item.quantity < item.quantity:
+            logger.warning(
+                "POS insufficient stock | transaction_number=%s | inventory_id=%s | requested=%s | available=%s",
+                trans_number,
+                item.inventory_id,
+                item.quantity,
+                inv_item.quantity,
+            )
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient stock for {inv_item.name}. Available: {inv_item.quantity}"
@@ -565,10 +620,24 @@ def create_pos_transaction(
     # Calculate tax and total
     tax = subtotal * TAX_RATE
     total = subtotal + tax - transaction.discount
+    logger.info(
+        "POS totals calculated | transaction_number=%s | subtotal=%.2f | tax=%.2f | discount=%.2f | total=%.2f",
+        trans_number,
+        subtotal,
+        tax,
+        transaction.discount,
+        total,
+    )
     
     # Calculate change
     change = transaction.payment_received - total
     if change < 0:
+        logger.warning(
+            "POS insufficient payment | transaction_number=%s | payment_received=%.2f | required_total=%.2f",
+            trans_number,
+            transaction.payment_received,
+            total,
+        )
         raise HTTPException(status_code=400, detail="Insufficient payment received")
     
     # Create POS transaction
@@ -587,6 +656,7 @@ def create_pos_transaction(
     )
     db.add(db_transaction)
     db.flush()
+    logger.info("POS transaction persisted | transaction_number=%s | transaction_id=%s", trans_number, db_transaction.id)
     
     # Add POS items
     for item_data in pos_items:
@@ -610,10 +680,17 @@ def create_pos_transaction(
     
     db.add(ledger_record)
     db.flush()
+    logger.info(
+        "POS ledger record persisted | transaction_number=%s | ledger_id=%s | balance=%.2f",
+        trans_number,
+        ledger_record.id,
+        ledger_record.balance,
+    )
     
     db_transaction.ledger_id = ledger_record.id
     
     db.commit()
+    logger.info("POS create committed | transaction_number=%s | transaction_id=%s", trans_number, db_transaction.id)
     db.refresh(db_transaction)
     return db_transaction
 
@@ -650,47 +727,29 @@ def generate_receipt_escpos(
         raise HTTPException(status_code=404, detail="Transaction not found")
     
     try:
+        items = db.query(POSItem).filter(POSItem.transaction_id == transaction_id).all()
+        receipt_lines = _build_receipt_lines(transaction, items)
+
         # Create a dummy printer to generate ESC/POS commands
         d = Dummy()
-        
-        # Store header
-        d.set(align='center', double_width=True, double_height=True)
-        d.text("RECEIPT\n")
-        d.set(align='center', double_width=False, double_height=False)
-        d.text("================================\n")
-        
-        # Transaction details
-        d.set(align='left')
-        d.text(f"Transaction: {transaction.transaction_number}\n")
-        d.text(f"Date: {transaction.transaction_date.strftime('%Y-%m-%d %H:%M')}\n")
-        if transaction.customer_name:
-            d.text(f"Customer: {transaction.customer_name}\n")
-        d.text("================================\n")
-        
-        # Items
-        items = db.query(POSItem).filter(POSItem.transaction_id == transaction_id).all()
-        for item in items:
-            inventory_item = db.query(InventoryItem).filter(InventoryItem.id == item.inventory_item_id).first()
-            item_name = inventory_item.name if inventory_item else "Unknown Item"
-            d.text(f"{item_name}\n")
-            d.text(f"  {item.quantity} x ${item.unit_price:.2f} = ${item.total:.2f}\n")
-        
-        d.text("================================\n")
-        
-        # Totals
-        d.text(f"Subtotal: ${transaction.subtotal:.2f}\n")
-        if transaction.discount > 0:
-            d.text(f"Discount: -${transaction.discount:.2f}\n")
-        if transaction.tax > 0:
-            d.text(f"Tax: ${transaction.tax:.2f}\n")
-        d.set(double_width=True, double_height=True)
-        d.text(f"TOTAL: ${transaction.total:.2f}\n")
-        d.set(double_width=False, double_height=False)
-        d.text(f"Payment: {transaction.payment_method.value}\n")
-        
-        d.text("\n")
-        d.set(align='center')
-        d.text("Thank you for your business!\n")
+
+        d.set(align='left', double_width=False, double_height=False)
+        for idx, line in enumerate(receipt_lines):
+            if line.startswith("RECEIPT"):
+                d.set(align='center', double_width=True, double_height=True)
+                d.text(f"{line}\n")
+                d.set(align='left', double_width=False, double_height=False)
+            elif line.startswith("TOTAL:"):
+                d.set(double_width=True, double_height=True)
+                d.text(f"{line}\n")
+                d.set(double_width=False, double_height=False)
+            elif idx == len(receipt_lines) - 1:
+                d.set(align='center')
+                d.text(f"{line}\n")
+                d.set(align='left')
+            else:
+                d.text(f"{line}\n")
+
         d.text("\n")
         
         # Cut paper
@@ -712,6 +771,72 @@ def generate_receipt_escpos(
     )
     
     # Note: Original thermal printer code removed for portable compatibility
+
+
+@router.post("/pos/transactions/{transaction_id}/receipt/whatsapp", response_model=WhatsAppReceiptResponse)
+def send_receipt_whatsapp(
+    transaction_id: int,
+    req: WhatsAppReceiptRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_cashier)
+):
+    """Send e-receipt for a transaction through WhatsApp."""
+    logger.info(
+        "WhatsApp receipt send start | transaction_id=%s | user_id=%s",
+        transaction_id,
+        getattr(current_user, "id", None),
+    )
+
+    transaction = db.query(POSTransaction).filter(POSTransaction.id == transaction_id).first()
+    if not transaction:
+        logger.warning("WhatsApp receipt transaction not found | transaction_id=%s", transaction_id)
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    phone_number = (req.phone_number or "").strip()
+    if not phone_number:
+        logger.warning("WhatsApp receipt missing phone_number | transaction_id=%s", transaction_id)
+        raise HTTPException(status_code=400, detail="phone_number is required")
+
+    items = db.query(POSItem).filter(POSItem.transaction_id == transaction_id).all()
+    receipt_text = "\n".join(_build_receipt_lines(transaction, items))
+    logger.info(
+        "WhatsApp receipt payload ready | transaction_id=%s | phone_number=%s | items_count=%s | message_chars=%s",
+        transaction_id,
+        phone_number,
+        len(items),
+        len(receipt_text),
+    )
+
+    try:
+        wa_client = WhatsAppClient()
+        provider_response = wa_client.send_text_message(phone_number, receipt_text)
+        logger.info(
+            "WhatsApp receipt send success | transaction_id=%s | phone_number=%s | provider_keys=%s",
+            transaction_id,
+            phone_number,
+            list(provider_response.keys()) if isinstance(provider_response, dict) else type(provider_response),
+        )
+    except ValueError as exc:
+        logger.exception(
+            "WhatsApp receipt validation/config error | transaction_id=%s | phone_number=%s",
+            transaction_id,
+            phone_number,
+        )
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception(
+            "WhatsApp receipt send failed | transaction_id=%s | phone_number=%s",
+            transaction_id,
+            phone_number,
+        )
+        raise HTTPException(status_code=502, detail=f"Failed to send WhatsApp receipt: {str(exc)}")
+
+    return WhatsAppReceiptResponse(
+        transaction_id=transaction_id,
+        phone_number=phone_number,
+        message="E-receipt sent successfully",
+        provider_response=provider_response,
+    )
 
 
 # ============= POS Cashier Closure =============

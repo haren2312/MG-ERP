@@ -230,6 +230,17 @@ class ItemRefundResponse(BaseModel):
         from_attributes = True
 
 
+class WhatsAppReceiptRequest(BaseModel):
+    phone_number: str
+
+
+class WhatsAppReceiptResponse(BaseModel):
+    transaction_id: int
+    phone_number: str
+    message: str
+    provider_response: dict
+
+
 # Report Schemas
 class SalesReportResponse(BaseModel):
     total_sales: float
